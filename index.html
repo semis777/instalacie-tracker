@@ -535,7 +535,7 @@ textarea{resize:vertical;min-height:80px}
 
     <!-- TAB: Rollouty -->
     <div class="asec" id="tRollout">
-      <button class="btn btn-primary btn-sm" onclick="openModal('mNewRollout')" style="margin-bottom:14px">+ Nový Rollout projekt</button>
+      <button class="btn btn-primary btn-sm" onclick="openNewRolloutModal()" style="margin-bottom:14px">+ Nový Rollout projekt</button>
       <div id="rolloutProjList"></div>
     </div>
 
@@ -637,6 +637,21 @@ textarea{resize:vertical;min-height:80px}
       <label>Email pre reporty</label>
       <input type="email" id="rProjEmail" placeholder="vedouci@firma.sk">
     </div>
+    <div class="fg">
+      <label>Oprávnení technici (ostatní môžu vidieť ale nie otvoriť)</label>
+      <div id="rProjTechList" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px"></div>
+      <div class="hint">Ak nevybráš nikoho = majú prístup všetci</div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div class="fg">
+        <label>Min. foto PRED</label>
+        <input type="number" id="rMinFotoPred" value="1" min="1" max="10">
+      </div>
+      <div class="fg">
+        <label>Min. foto PO</label>
+        <input type="number" id="rMinFotoPo" value="1" min="1" max="10">
+      </div>
+    </div>
 
     <div class="divider"></div>
     <div class="card-title">Import predajní z XLS</div>
@@ -654,7 +669,7 @@ textarea{resize:vertical;min-height:80px}
       </div>
       <div id="xlsStoreCount" style="font-size:13px;color:var(--muted);margin-bottom:12px"></div>
       <div class="fg">
-        <label>Názvy komponentov (stĺpce J–N)</label>
+        <label>Názvy a obrázky komponentov (stĺpce J–N)</label>
         <div id="xlsCompNames"></div>
       </div>
     </div>
@@ -948,24 +963,55 @@ function selectRolloutProject(id) {
   showScreen('sRolloutStores');
 }
 
+let rolloutSortAZ = false;
+let rolloutSearchQuery = '';
+
 function renderRolloutStoreList() {
   const el = document.getElementById('rolloutStoreList');
   if (!currentRolloutProject?.stores?.length) {
     el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--muted);">Žiadne predajne.</div>';
     return;
   }
-  el.innerHTML = currentRolloutProject.stores.map(s => {
-    const done = appData.reports.some(r => r.rolloutProjectId === currentRolloutProject.id && r.storeId === s.id && r.completed);
-    return `
-      <div class="store-item" onclick="startRolloutInstall('${s.id}')">
-        <div>
-          <div class="si-name">${esc(s.name)}</div>
-          <div class="si-code">Kód: ${esc(s.code)}</div>
+
+  const hasAccess = !currentRolloutProject.allowedTechs?.length || currentRolloutProject.allowedTechs.includes(currentUser?.pin) || currentUser?.isAdmin;
+
+  let stores = [...currentRolloutProject.stores];
+  if (rolloutSortAZ) stores.sort((a,b) => a.name.localeCompare(b.name, 'sk'));
+  if (rolloutSearchQuery) {
+    const q = rolloutSearchQuery.toLowerCase();
+    stores = stores.filter(s => s.name.toLowerCase().includes(q) || s.code.toLowerCase().includes(q));
+  }
+
+  el.innerHTML = `
+    <div style="margin-bottom:12px">
+      <input type="text" placeholder="🔍 Hľadaj predajňu..." value="${esc(rolloutSearchQuery)}"
+        oninput="rolloutSearchQuery=this.value;renderRolloutStoreList()"
+        style="margin-bottom:8px">
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
+        <input type="checkbox" ${rolloutSortAZ?'checked':''} onchange="rolloutSortAZ=this.checked;renderRolloutStoreList()">
+        Radiť A–Z
+      </label>
+    </div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:8px">${stores.length} predajní</div>
+    ${stores.map(s => {
+      const done = appData.reports.some(r => r.rolloutProjectId === currentRolloutProject.id && r.storeId === s.id && r.completed);
+      const canOpen = !currentRolloutProject.allowedTechs?.length ||
+        appData.technicians.find(t => t.id === currentRolloutProject.allowedTechs?.find(id => id === t.id) && t.pin === currentUser?.pin) ||
+        currentUser?.isAdmin;
+      return `
+        <div class="store-item" onclick="${canOpen ? `startRolloutInstall('${s.id}')` : `showToast('Nemáš prístup k tomuto projektu','err')`}">
+          <div>
+            <div class="si-name">${esc(s.name)}</div>
+            <div class="si-code">Kód: ${esc(s.code)}</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px">
+            <span class="si-status ${done?'done':'pending'}">${done?'Hotovo':'Čaká'}</span>
+            ${!canOpen ? '<span style="font-size:16px">🔒</span>' : ''}
+          </div>
         </div>
-        <span class="si-status ${done ? 'done' : 'pending'}">${done ? 'Hotovo' : 'Čaká'}</span>
-      </div>
-    `;
-  }).join('');
+      `;
+    }).join('')}
+  `;
 }
 
 // ================================================================
@@ -985,12 +1031,22 @@ function startRolloutInstall(storeId) {
   currentRolloutStore = currentRolloutProject.stores.find(s => s.id === storeId);
   if (!currentRolloutStore) return;
 
+  // Access check
+  if (currentRolloutProject.allowedTechs?.length && !currentUser?.isAdmin) {
+    const myTech = appData.technicians.find(t => t.pin === currentUser?.pin);
+    if (!myTech || !currentRolloutProject.allowedTechs.includes(myTech.id)) {
+      showToast('Nemáš prístup k tomuto projektu', 'err');
+      return;
+    }
+  }
+
   rolloutStepIndex = 0;
   rolloutArrivalTime = new Date();
   rolloutGPS = null;
   rolloutStepData = {
     vedouciMeno: '', vedouciNote: '',
-    predPhotos: [], checksInstall: new Array(currentRolloutStore.components?.length || 0).fill(false),
+    predPhotos: [],
+    checksInstall: (currentRolloutStore.components || []).map(c => c.count === 0),
     poPhotos: [], rapportPhotos: []
   };
 
@@ -1071,43 +1127,60 @@ function renderRolloutStepContent() {
   else if (step.type === 'photo') {
     const photos = rolloutStepData[step.key];
     const isRapport = step.key === 'rapportPhotos';
-    const required = isRapport ? 1 : 1;
+    let required = 1;
+    if (step.key === 'predPhotos') required = currentRolloutProject.minFotoPred || 1;
+    if (step.key === 'poPhotos') required = currentRolloutProject.minFotoPo || 1;
+    const ok = photos.length >= required;
     el.innerHTML = `
       <div class="card">
         <div class="step-number">Krok ${i+1} z ${ROLLOUT_STEPS.length}</div>
         <div class="step-title">${step.icon} ${step.title}</div>
+        <div style="font-size:12px;color:${ok?'var(--ok)':'var(--accent)'};font-weight:600;margin-bottom:10px">
+          ${photos.length} / ${required} fotografií (min. ${required})
+        </div>
         <label class="upload-area">
           <input type="file" accept="image/*" multiple capture="environment" onchange="addRolloutPhotos('${step.key}', this)">
           <div class="ua-icon">📷</div>
-          <div class="ua-text"><strong>Pridať fotografie</strong><br>${photos.length} foto pridaných</div>
+          <div class="ua-text"><strong>Pridať fotografie</strong><br>Klikni alebo odfot</div>
         </label>
-        <div class="photos-grid" id="rPhotoGrid_${step.key}">
+        <div class="photos-grid" style="margin-top:10px">
           ${photos.map((p,pi) => `<div class="photo-thumb"><img src="${p.data}"><button class="rm" onclick="removeRolloutPhoto('${step.key}',${pi})">✕</button></div>`).join('')}
         </div>
       </div>
-      <button class="btn btn-primary" id="btnRPhoto" onclick="nextRolloutStep()" ${photos.length >= required ? '' : 'disabled'}>
-        ${rolloutStepIndex === ROLLOUT_STEPS.length - 2 ? 'Pokračovať →' : 'Pokračovať →'}
-      </button>`;
+      <button class="btn btn-primary" onclick="nextRolloutStep()" ${ok ? '' : 'disabled'}>Pokračovať →</button>`;
   }
   else if (step.type === 'checklist') {
     const comps = currentRolloutStore.components || [];
+    const activeComps = comps.filter(c => c.count > 0);
+    const activeChecks = activeComps.map((c,i) => {
+      const origIdx = comps.indexOf(c);
+      return rolloutStepData.checksInstall[origIdx];
+    });
+    const allChecked = activeChecks.every(Boolean);
     el.innerHTML = `
       <div class="card">
         <div class="step-number">Krok ${i+1} z ${ROLLOUT_STEPS.length}</div>
         <div class="step-title">${step.icon} ${step.title}</div>
         <ul class="check-list">
-          ${comps.map((c, ci) => `
-            <li class="check-item" onclick="toggleRolloutCheck(${ci})">
-              <div class="check-box ${rolloutStepData.checksInstall[ci] ? 'checked' : ''}"></div>
-              <div>
-                <div class="check-label ${rolloutStepData.checksInstall[ci] ? 'checked' : ''}">${esc(c.label)}</div>
-                <div style="font-size:12px;color:var(--muted)">Počet: ${c.count}</div>
-              </div>
-            </li>
-          `).join('')}
+          ${comps.map((c, ci) => {
+            const active = c.count > 0;
+            const checked = rolloutStepData.checksInstall[ci];
+            return `
+              <li class="check-item" style="${!active ? 'opacity:0.35;pointer-events:none' : ''}" onclick="${active ? `toggleRolloutCheck(${ci})` : ''}">
+                <div class="check-box ${checked ? 'checked' : ''}" style="${!active ? 'border-color:var(--border)' : ''}"></div>
+                <div style="flex:1">
+                  <div class="check-label ${checked ? 'checked' : ''}">${esc(c.label)}</div>
+                  <div style="font-size:12px;color:${active?'var(--accent)':'var(--muted)'}">
+                    ${active ? `<b>${c.count} ks</b>` : '0 ks — neinštaluje sa'}
+                  </div>
+                  ${c.image && active ? `<img src="${c.image}" style="width:100%;max-width:200px;border-radius:6px;margin-top:8px;border:1px solid var(--border)">` : ''}
+                </div>
+              </li>
+            `;
+          }).join('')}
         </ul>
       </div>
-      <button class="btn btn-primary" id="btnRChecks" onclick="nextRolloutStep()" ${rolloutStepData.checksInstall.every(Boolean) ? '' : 'disabled'}>Pokračovať →</button>`;
+      <button class="btn btn-primary" id="btnRChecks" onclick="nextRolloutStep()" ${allChecked ? '' : 'disabled'}>Pokračovať →</button>`;
   }
   else if (step.type === 'finish') {
     el.innerHTML = `
@@ -1360,15 +1433,49 @@ function importXLS(input) {
   reader.readAsArrayBuffer(file);
 }
 
+// Component images storage
+let xlsCompImages = [null, null, null, null, null];
+
 function renderCompNameInputs() {
   const wrap = document.getElementById('xlsCompNames');
   const cols = ['J','K','L','M','N'];
   wrap.innerHTML = cols.map((c,i) => `
-    <div class="fg" style="margin-bottom:8px">
-      <label style="font-size:12px">Stĺpec ${c}</label>
-      <input type="text" id="compLabel_${i}" value="${xlsCompLabels[i]}" placeholder="Názov komponentu" oninput="xlsCompLabels[${i}]=this.value">
+    <div style="background:var(--bg);border-radius:8px;padding:12px;margin-bottom:8px">
+      <div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:6px">STĹPEC ${c}</div>
+      <input type="text" id="compLabel_${i}" value="${xlsCompLabels[i]}" placeholder="Názov komponentu" oninput="xlsCompLabels[${i}]=this.value" style="margin-bottom:8px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <label style="cursor:pointer;font-size:12px;color:var(--accent);font-weight:600">
+          📷 ${xlsCompImages[i] ? 'Zmeniť obrázok' : 'Pridať obrázok'}
+          <input type="file" accept="image/*" style="display:none" onchange="addCompImage(${i},this)">
+        </label>
+        ${xlsCompImages[i] ? `<img src="${xlsCompImages[i]}" style="width:48px;height:36px;object-fit:cover;border-radius:4px;border:1px solid var(--border)">
+          <button onclick="xlsCompImages[${i}]=null;renderCompNameInputs()" style="background:none;border:none;color:var(--err);cursor:pointer;font-size:12px">✕</button>` : ''}
+      </div>
     </div>
   `).join('');
+}
+
+function addCompImage(idx, input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const img = new Image();
+    img.onload = () => {
+      const MAX = 600;
+      let w = img.width, h = img.height;
+      if (w > MAX || h > MAX) {
+        if (w > h) { h = Math.round(h*MAX/w); w = MAX; } else { w = Math.round(w*MAX/h); h = MAX; }
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      xlsCompImages[idx] = canvas.toDataURL('image/jpeg', 0.7);
+      renderCompNameInputs();
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
 }
 
 function updateXLSPreview() {
@@ -1388,14 +1495,29 @@ function getXLSStores() {
     name: String(r[4] || ''),
     components: compCols.map((ci,i) => ({
       label: xlsCompLabels[i],
-      count: r[ci] || 0
-    })).filter(c => c.count > 0)
+      count: r[ci] || 0,
+      image: xlsCompImages[i] || null
+    }))
   }));
 }
 
 function toggleManualStores() {
   const el = document.getElementById('rProjStoresManual');
   el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
+
+function populateTechCheckboxes(existingAllowed) {
+  const wrap = document.getElementById('rProjTechList');
+  if (!appData.technicians.length) {
+    wrap.innerHTML = '<div style="font-size:12px;color:var(--muted);">Žiadni technici. Pridaj ich v záložke Technici.</div>';
+    return;
+  }
+  wrap.innerHTML = appData.technicians.map(t => `
+    <label style="display:flex;align-items:center;gap:6px;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:6px 10px;cursor:pointer;font-size:13px;font-weight:600">
+      <input type="checkbox" class="tech-check" value="${t.id}" ${existingAllowed?.includes(t.id) ? 'checked' : ''}>
+      ${esc(t.name)}
+    </label>
+  `).join('');
 }
 
 // ================================================================
@@ -1407,21 +1529,26 @@ function renderRolloutAdminList() {
     el.innerHTML = '<div style="text-align:center;padding:20px;color:var(--muted);">Žiadne Rollout projekty.</div>';
     return;
   }
-  el.innerHTML = appData.rolloutProjects.map(p => `
+  el.innerHTML = appData.rolloutProjects.map(p => {
+    const done = appData.reports.filter(r => r.rolloutProjectId === p.id && r.completed).length;
+    const total = p.stores?.length || 0;
+    return `
     <div class="proj-item">
       <div class="proj-item-hdr">
-        <div>
+        <div style="flex:1">
           <div class="proj-item-name">${esc(p.name)}</div>
-          <div class="proj-item-meta">${esc(p.from)} – ${esc(p.to)} &nbsp;|&nbsp; 📬 ${esc(p.email)} &nbsp;|&nbsp; 🏪 ${p.stores?.length||0} predajní</div>
+          <div class="proj-item-meta">${esc(p.from)} – ${esc(p.to)} &nbsp;|&nbsp; 📬 ${esc(p.email)}</div>
+          <div class="proj-item-meta">🏪 ${done}/${total} predajní hotovo</div>
           <div class="proj-item-meta" style="margin-top:4px"><span class="tag ${p.status==='active'?'tag-ok':'tag-warn'}">${p.status==='active'?'Aktívny':'Neaktívny'}</span></div>
         </div>
-        <div class="proj-actions">
-          <button class="btn btn-outline btn-sm" onclick="toggleRolloutStatus('${p.id}')">${p.status==='active'?'Deaktivovať':'Aktivovať'}</button>
+        <div class="proj-actions" style="flex-direction:column;gap:6px">
+          <button class="btn btn-outline btn-sm" onclick="toggleRolloutStatus('${p.id}')">${p.status==='active'?'Deaktiv.':'Aktivovať'}</button>
+          <button class="btn btn-outline btn-sm" onclick="showResetStoreModal('${p.id}')">🔄 Reset</button>
           <button class="btn-del" onclick="deleteRolloutProject('${p.id}')">✕</button>
         </div>
       </div>
     </div>
-  `).join('');
+  `}).join('');
 }
 
 function saveRolloutProject() {
@@ -1443,12 +1570,17 @@ function saveRolloutProject() {
   }
   if (!stores.length) { showToast('Pridaj aspoň jednu predajňu', 'err'); return; }
 
+  // Get allowed technicians
+  const allowedTechs = Array.from(document.querySelectorAll('.tech-check:checked')).map(cb => cb.value);
+  const minFotoPred = parseInt(document.getElementById('rMinFotoPred').value) || 1;
+  const minFotoPo = parseInt(document.getElementById('rMinFotoPo').value) || 1;
+
   const id = document.getElementById('editRolloutId').value;
   if (id) {
     const idx = appData.rolloutProjects.findIndex(p => p.id === id);
-    if (idx >= 0) appData.rolloutProjects[idx] = { ...appData.rolloutProjects[idx], name, from, to, email, stores };
+    if (idx >= 0) appData.rolloutProjects[idx] = { ...appData.rolloutProjects[idx], name, from, to, email, stores, allowedTechs, minFotoPred, minFotoPo };
   } else {
-    appData.rolloutProjects.push({ id: uid(), name, from, to, email, stores, status: 'active', createdAt: new Date().toISOString() });
+    appData.rolloutProjects.push({ id: uid(), name, from, to, email, stores, allowedTechs, minFotoPred, minFotoPo, status: 'active', createdAt: new Date().toISOString() });
   }
 
   saveLocal(); syncCloud();
@@ -1462,9 +1594,64 @@ function saveRolloutProject() {
   document.getElementById('xlsPreview').style.display = 'none';
 }
 
+function openNewRolloutModal() {
+  document.getElementById('editRolloutId').value = '';
+  document.getElementById('mRolloutTitle').textContent = 'Nový Rollout projekt';
+  document.getElementById('rProjName').value = '';
+  document.getElementById('rProjFrom').value = '';
+  document.getElementById('rProjTo').value = '';
+  document.getElementById('rProjEmail').value = '';
+  document.getElementById('rMinFotoPred').value = 1;
+  document.getElementById('rMinFotoPo').value = 1;
+  document.getElementById('xlsPreview').style.display = 'none';
+  document.getElementById('rProjStoresManual').style.display = 'none';
+  xlsRawData = [];
+  xlsCompImages = [null,null,null,null,null];
+  xlsCompLabels = ['Regalbanner kurz 66,5cm','Regalbanner lang 133 vzor 1','Regalbanner lang 133 vzor 2','Regalbanner lang 133 vzor 3','Regalfahne'];
+  populateTechCheckboxes([]);
+  openModal('mNewRollout');
+}
+
 function toggleRolloutStatus(id) {
   const p = appData.rolloutProjects.find(p => p.id === id);
   if (p) { p.status = p.status === 'active' ? 'inactive' : 'active'; saveLocal(); syncCloud(); renderRolloutAdminList(); renderDashboard(); }
+}
+
+function showResetStoreModal(projId) {
+  const p = appData.rolloutProjects.find(p => p.id === projId);
+  if (!p) return;
+  const doneReports = appData.reports.filter(r => r.rolloutProjectId === projId && r.completed);
+  if (!doneReports.length) { showToast('Žiadne hotové predajne na reset', 'err'); return; }
+
+  const list = doneReports.map(r => `
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border)">
+      <div>
+        <div style="font-weight:700;font-size:14px">${esc(r.storeName)}</div>
+        <div style="font-size:12px;color:var(--muted)">${r.endTime ? fmtDateTime(new Date(r.endTime)) : '–'}</div>
+      </div>
+      <button class="btn btn-outline btn-sm" onclick="resetStore('${projId}','${r.storeId}')">Reset</button>
+    </div>
+  `).join('');
+
+  // Show inline in admin
+  const el = document.getElementById('rolloutProjList');
+  el.innerHTML = `
+    <div class="card">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
+        <button onclick="renderRolloutAdminList()" style="background:none;border:none;font-size:20px;cursor:pointer">←</button>
+        <div style="font-weight:800;font-size:16px">Reset predajní — ${esc(p.name)}</div>
+      </div>
+      ${list}
+    </div>
+  `;
+}
+
+function resetStore(projId, storeId) {
+  if (!confirm('Resetovať túto predajňu? Report zostane v histórii, ale predajňa sa označí ako nehotová.')) return;
+  appData.reports = appData.reports.filter(r => !(r.rolloutProjectId === projId && r.storeId === storeId));
+  saveLocal(); syncCloud();
+  showToast('Predajňa resetovaná ✓', 'ok');
+  showResetStoreModal(projId);
 }
 
 function deleteRolloutProject(id) {
