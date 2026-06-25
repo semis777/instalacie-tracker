@@ -1011,13 +1011,14 @@ function renderRolloutStoreList() {
         currentUser?.isAdmin;
       return `
         <div class="store-item" onclick="${canOpen ? `startRolloutInstall('${s.id}')` : `showToast('Nemáš prístup k tomuto projektu','err')`}">
-          <div>
+          <div style="flex:1">
             <div class="si-name">${esc(s.name)}</div>
             <div class="si-code">Kód: ${esc(s.code)}</div>
           </div>
           <div style="display:flex;align-items:center;gap:6px">
             <span class="si-status ${done?'done':'pending'}">${done?'Hotovo':'Čaká'}</span>
             ${!canOpen ? '<span style="font-size:16px">🔒</span>' : ''}
+            ${done && currentUser?.isAdmin ? `<button onclick="event.stopPropagation();resetSingleStore('${s.id}')" style="background:none;border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:11px;cursor:pointer;color:var(--muted);white-space:nowrap">🔄 Reset</button>` : ''}
           </div>
         </div>
       `;
@@ -1655,6 +1656,14 @@ function showResetStoreModal(projId) {
       ${list}
     </div>
   `;
+}
+
+function resetSingleStore(storeId) {
+  if (!confirm('Resetovať túto predajňu?')) return;
+  appData.reports = appData.reports.filter(r => !(r.rolloutProjectId === currentRolloutProject.id && r.storeId === storeId));
+  saveLocal(); syncCloud();
+  showToast('Predajňa resetovaná ✓', 'ok');
+  renderRolloutStoreList();
 }
 
 function resetStore(projId, storeId) {
