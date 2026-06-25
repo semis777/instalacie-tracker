@@ -490,7 +490,8 @@ textarea{resize:vertical;min-height:80px}
 const HARDCODED = {
   binKey: '$2a$10$n/q.ffTg.17g.TaNGyMLPOTE23AgQUWjqlkISzaq1xaJVpVQUVH0S',
   binId: '6a3cd316f5f4af5e292d4d04',
-  webhookUrl: 'https://hook.eu1.make.com/ap3cgawflnfloh9tvcaxg8xonxbic4bv'
+  webhookUrl: 'https://hook.eu1.make.com/ap3cgawflnfloh9tvcaxg8xonxbic4bv',
+  webhookNovy: 'https://hook.eu1.make.com/smu5fmufxtv23gcdp7pul6yserrvilux'
 };
 
 // ================================================================
@@ -785,7 +786,7 @@ async function submitNovy() {
   try {
     const pdfBase64 = await generateNovyPDF(cislo, endTime);
     setSending(true, 'Odosielam email...');
-    await sendWebhook({
+    await sendWebhookNovy({
       to_email: appData.settings.emailNovy,
       project_name: 'Nová zákazka',
       store_name: cislo,
@@ -911,6 +912,16 @@ async function generateNovyPDF(cislo, endTime) {
 // ================================================================
 async function sendWebhook(payload) {
   const url = appData.settings.webhookUrl;
+  const res = await fetch('/.netlify/functions/send', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ webhookUrl: url, payload })
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+}
+
+async function sendWebhookNovy(payload) {
+  const url = HARDCODED.webhookNovy;
   const res = await fetch('/.netlify/functions/send', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
