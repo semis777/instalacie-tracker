@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>INSTRACK</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 :root {
   --ink: #1a1a2e;
@@ -189,6 +190,53 @@ textarea{resize:vertical;min-height:80px}
 .mt8{margin-top:8px}
 .mt16{margin-top:16px}
 .required-note{font-size:12px;color:var(--err);margin-top:8px;display:flex;align-items:center;gap:4px}
+
+/* ROLLOUT PROJECT LIST */
+.store-item{background:var(--white);border:1.5px solid var(--border);border-radius:var(--r);padding:14px 16px;margin-bottom:10px;cursor:pointer;transition:all .18s;display:flex;align-items:center;justify-content:space-between;gap:10px}
+.store-item:hover{border-color:var(--accent);box-shadow:var(--sh)}
+.store-item .si-name{font-weight:700;font-size:15px}
+.store-item .si-code{font-size:12px;color:var(--muted)}
+.store-item .si-status{font-size:11px;font-weight:700;padding:3px 10px;border-radius:12px;flex-shrink:0}
+.store-item .si-status.done{background:var(--ok-l);color:var(--ok)}
+.store-item .si-status.pending{background:#f0f0f0;color:var(--muted)}
+
+/* ROLLOUT STEPS */
+.step-dots{display:flex;align-items:center;margin-bottom:20px;overflow-x:auto;padding-bottom:4px;scrollbar-width:none}
+.step-dots::-webkit-scrollbar{display:none}
+.sdot{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;flex-shrink:0;transition:all .2s}
+.sdot.done{background:var(--ok);color:#fff}
+.sdot.active{background:var(--accent);color:#fff;box-shadow:0 0 0 3px var(--accent-l)}
+.sdot.wait{background:var(--border);color:var(--muted)}
+.sline{height:2px;flex:1;min-width:8px;background:var(--border);transition:background .3s}
+.sline.done{background:var(--ok)}
+
+.check-list{list-style:none}
+.check-item{display:flex;align-items:flex-start;gap:12px;padding:13px 0;border-bottom:1px solid var(--border);cursor:pointer}
+.check-item:last-child{border-bottom:none}
+.check-box{width:26px;height:26px;border:2px solid var(--border);border-radius:6px;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .18s;margin-top:1px}
+.check-box.checked{background:var(--ok);border-color:var(--ok);color:#fff}
+.check-box.checked::after{content:'✓';font-size:14px;font-weight:800}
+.check-label{font-size:15px;color:var(--ink);line-height:1.4}
+.check-label.checked{text-decoration:line-through;color:var(--muted)}
+
+/* ROLLOUT ADMIN */
+.proj-item{background:var(--white);border:1px solid var(--border);border-radius:var(--r);padding:16px;margin-bottom:12px}
+.proj-item-hdr{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.proj-item-name{font-weight:800;font-size:15px}
+.proj-item-meta{font-size:12px;color:var(--muted);margin-top:3px}
+.proj-actions{display:flex;gap:6px;flex-shrink:0}
+
+/* IMPORT AREA */
+.import-area{border:2px dashed var(--border);border-radius:var(--r);padding:24px;text-align:center;cursor:pointer;transition:all .2s;margin-bottom:16px}
+.import-area:hover{border-color:var(--accent);background:var(--accent-l)}
+.import-area input{display:none}
+.import-icon{font-size:32px;margin-bottom:8px}
+.import-text{font-size:14px;color:var(--muted)}
+
+/* COMPONENT BADGES */
+.comp-badge{display:inline-flex;align-items:center;gap:6px;background:var(--bg);border:1px solid var(--border);border-radius:var(--rs);padding:6px 12px;font-size:13px;font-weight:600;margin:3px}
+.comp-badge .comp-count{background:var(--accent);color:#fff;border-radius:4px;padding:1px 6px;font-size:12px}
+.comp-badge .comp-count.zero{background:var(--border);color:var(--muted)}
 </style>
 </head>
 <body>
@@ -359,6 +407,78 @@ textarea{resize:vertical;min-height:80px}
   </div>
 </div>
 
+
+<!-- ======================================================= -->
+<!-- SCREEN: ROLLOUT - STORE LIST -->
+<!-- ======================================================= -->
+<div class="screen" id="sRolloutStores">
+  <div class="wrap">
+    <div class="step-header">
+      <button onclick="showScreen('sDash')">←</button>
+      <div class="step-header-info">
+        <div class="label">Rollout</div>
+        <div class="value" id="rolloutProjName">–</div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">Vyber predajňu</div>
+      <div id="rolloutStoreList"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================= -->
+<!-- SCREEN: ROLLOUT - INSTALLATION STEPS -->
+<!-- ======================================================= -->
+<div class="screen" id="sRolloutInstall">
+  <div class="wrap">
+    <div class="step-header">
+      <button onclick="confirmLeaveRollout()">←</button>
+      <div class="step-header-info">
+        <div class="label" id="rInstallProjLabel">Rollout</div>
+        <div class="value" id="rInstallStoreName">–</div>
+      </div>
+    </div>
+
+    <div class="info-chips">
+      <div class="chip"><div class="cl">Príchod</div><div class="cv" id="rTime">–</div></div>
+      <div class="chip"><div class="cl">GPS</div><div class="cv" id="rGPS" style="font-size:11px">Získavam...</div></div>
+      <div class="chip"><div class="cl">Technik</div><div class="cv" id="rTechnik">–</div></div>
+    </div>
+
+    <div class="prog-wrap">
+      <div class="prog-label"><span>Postup</span><span id="rProgText">0 / 7</span></div>
+      <div class="prog-bar"><div class="prog-fill" id="rProgFill" style="width:0%"></div></div>
+    </div>
+
+    <div class="step-dots" id="rStepDots"></div>
+    <div id="rStepContent"></div>
+  </div>
+</div>
+
+<!-- ======================================================= -->
+<!-- SCREEN: ROLLOUT DONE -->
+<!-- ======================================================= -->
+<div class="screen" id="sRolloutDone">
+  <div class="wrap">
+    <div class="card done-card">
+      <span class="done-icon">✅</span>
+      <h2>Inštalácia dokončená!</h2>
+      <p>Report bol odoslaný emailom.</p>
+      <div class="chip" style="text-align:left;margin-bottom:16px">
+        <div class="cl">Predajňa</div>
+        <div class="cv" id="rDoneStore">–</div>
+      </div>
+      <div class="chip" style="text-align:left;margin-bottom:20px">
+        <div class="cl">Čas ukončenia</div>
+        <div class="cv" id="rDoneTime">–</div>
+      </div>
+      <button class="btn btn-primary" onclick="showScreen('sRolloutStores')">Ďalšia predajňa</button>
+      <button class="btn btn-outline mt8" onclick="showScreen('sDash')">Hlavné menu</button>
+    </div>
+  </div>
+</div>
+
 <!-- ======================================================= -->
 <!-- SCREEN: ADMIN LOGIN -->
 <!-- ======================================================= -->
@@ -396,6 +516,7 @@ textarea{resize:vertical;min-height:80px}
       <button class="atab active" onclick="switchTab('tTech',this)">Technici</button>
       <button class="atab" onclick="switchTab('tReports',this)">Reporty</button>
       <button class="atab" onclick="switchTab('tSettings',this)">Nastavenia</button>
+      <button class="atab" onclick="switchTab('tRollout',this)">Rollouty</button>
     </div>
 
     <!-- TAB: Technici -->
@@ -410,6 +531,12 @@ textarea{resize:vertical;min-height:80px}
     <!-- TAB: Reporty -->
     <div class="asec" id="tReports">
       <div id="reportList"></div>
+    </div>
+
+    <!-- TAB: Rollouty -->
+    <div class="asec" id="tRollout">
+      <button class="btn btn-primary btn-sm" onclick="openModal('mNewRollout')" style="margin-bottom:14px">+ Nový Rollout projekt</button>
+      <div id="rolloutProjList"></div>
     </div>
 
     <!-- TAB: Nastavenia -->
@@ -481,6 +608,81 @@ textarea{resize:vertical;min-height:80px}
   </div>
 </div>
 
+<!-- ======================================================= -->
+<!-- MODAL: Nový Rollout projekt -->
+<!-- ======================================================= -->
+<div class="modal-ov" id="mNewRollout">
+  <div class="modal">
+    <div class="modal-title">
+      <span id="mRolloutTitle">Nový Rollout projekt</span>
+      <button class="modal-close" onclick="closeModal('mNewRollout')">✕</button>
+    </div>
+    <input type="hidden" id="editRolloutId">
+
+    <div class="fg">
+      <label>Názov projektu</label>
+      <input type="text" id="rProjName" placeholder="napr. LIDL - Alesto 2026">
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div class="fg">
+        <label>Obdobie od</label>
+        <input type="date" id="rProjFrom">
+      </div>
+      <div class="fg">
+        <label>Obdobie do</label>
+        <input type="date" id="rProjTo">
+      </div>
+    </div>
+    <div class="fg">
+      <label>Email pre reporty</label>
+      <input type="email" id="rProjEmail" placeholder="vedouci@firma.sk">
+    </div>
+
+    <div class="divider"></div>
+    <div class="card-title">Import predajní z XLS</div>
+
+    <label class="import-area">
+      <input type="file" accept=".xlsx,.xls" onchange="importXLS(this)">
+      <div class="import-icon">📊</div>
+      <div class="import-text"><strong>Klikni a vyber XLS súbor</strong><br>Formát: stĺpce C, D, E, J, K, L, M, N</div>
+    </label>
+
+    <div id="xlsPreview" style="display:none">
+      <div class="fg">
+        <label>Filter stĺpec C (GES) — vyber hodnotu</label>
+        <select id="xlsFilterVal"></select>
+      </div>
+      <div id="xlsStoreCount" style="font-size:13px;color:var(--muted);margin-bottom:12px"></div>
+      <div class="fg">
+        <label>Názvy komponentov (stĺpce J–N)</label>
+        <div id="xlsCompNames"></div>
+      </div>
+    </div>
+
+    <div id="rProjStoresManual" style="display:none">
+      <div class="fg">
+        <label>Alebo zadaj predajne manuálne (každá na riadok: kód | názov)</label>
+        <textarea id="rProjStoresText" rows="5" placeholder="101 | Žiar nad Hronom&#10;105 | Prievidza"></textarea>
+      </div>
+    </div>
+
+    <button class="btn btn-outline btn-sm mt8" style="margin-bottom:12px" onclick="toggleManualStores()">Zadať manuálne</button>
+
+    <button class="btn btn-primary" onclick="saveRolloutProject()">Uložiť projekt</button>
+    <button class="btn btn-outline mt8" onclick="closeModal('mNewRollout')">Zrušiť</button>
+  </div>
+</div>
+
+<!-- MODAL: Confirm leave rollout -->
+<div class="modal-ov" id="mLeaveRollout">
+  <div class="modal">
+    <div class="modal-title"><span>Opustiť inštaláciu?</span><button class="modal-close" onclick="closeModal('mLeaveRollout')">✕</button></div>
+    <p style="color:var(--muted);font-size:14px;margin-bottom:20px">Postup tejto predajne sa stratí. Naozaj chceš odísť?</p>
+    <button class="btn btn-danger" onclick="leaveRollout()">Áno, odísť</button>
+    <button class="btn btn-outline mt8" onclick="closeModal('mLeaveRollout')">Zostať</button>
+  </div>
+</div>
+
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
 <script>
@@ -500,6 +702,7 @@ const HARDCODED = {
 let appData = {
   technicians: [],
   reports: [],
+  rolloutProjects: [],
   settings: {
     adminPwd: '1234',
     emailNovy: 'lengyel@bittner-print.com',
@@ -520,6 +723,25 @@ let novyState = {
 
 // PIN input
 let pinInput = '';
+
+// XLS import state
+let xlsRawData = [];
+let xlsCompLabels = ['Regalbanner kurz 66,5cm', 'Regalbanner lang 133 vzor 1', 'Regalbanner lang 133 vzor 2', 'Regalbanner lang 133 vzor 3', 'Regalfahne'];
+
+// Rollout state
+let currentRolloutProject = null;
+let currentRolloutStore = null;
+let rolloutStepIndex = 0;
+let rolloutArrivalTime = null;
+let rolloutGPS = null;
+let rolloutStepData = {
+  vedouciMeno: '',
+  vedouciNote: '',
+  predPhotos: [],
+  checksInstall: [],
+  poPhotos: [],
+  rapportPhotos: []
+};
 
 // ================================================================
 // STORAGE
@@ -554,7 +776,7 @@ async function syncCloud() {
     await fetch(`https://api.jsonbin.io/v3/b/${binId}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', 'X-Master-Key': binKey },
-      body: JSON.stringify({ technicians: appData.technicians, reports: appData.reports, settings: { emailNovy: appData.settings.emailNovy, adminPwd: appData.settings.adminPwd } })
+      body: JSON.stringify({ technicians: appData.technicians, reports: appData.reports, rolloutProjects: appData.rolloutProjects, settings: { emailNovy: appData.settings.emailNovy, adminPwd: appData.settings.adminPwd } })
     });
   } catch(e) {}
 }
@@ -571,6 +793,7 @@ async function loadCloud() {
       if (j.record) {
         if (j.record.technicians) appData.technicians = j.record.technicians;
         if (j.record.reports) appData.reports = j.record.reports;
+        if (j.record.rolloutProjects) appData.rolloutProjects = j.record.rolloutProjects;
         if (j.record.settings) {
           appData.settings.emailNovy = j.record.settings.emailNovy || appData.settings.emailNovy;
           appData.settings.adminPwd = j.record.settings.adminPwd || appData.settings.adminPwd;
@@ -658,6 +881,7 @@ function afterLogin() {
   } else {
     document.getElementById('hdrAdminBtn').style.display = 'none';
     document.getElementById('dashGreet').textContent = `Ahoj, ${currentUser.name.split(' ')[0]}!`;
+    renderDashboard();
     showScreen('sDash');
   }
   pinInput = '';
@@ -676,6 +900,582 @@ function doLogout() {
 
 // ================================================================
 // NOVÁ ZÁKAZKA
+// ================================================================
+// ================================================================
+// DASHBOARD - show rollout projects
+// ================================================================
+function renderDashboard() {
+  const rollouts = appData.rolloutProjects.filter(p => p.status === 'active');
+  const tile = document.getElementById('tileRollout');
+  const list = document.getElementById('rolloutList');
+  const items = document.getElementById('rolloutItems');
+
+  if (rollouts.length > 0) {
+    tile.classList.remove('disabled');
+    tile.onclick = () => {
+      if (rollouts.length === 1) selectRolloutProject(rollouts[0].id);
+      else { list.style.display = 'block'; renderRolloutList(); }
+    };
+    if (rollouts.length > 1) {
+      list.style.display = 'block';
+      renderRolloutList();
+    }
+  } else {
+    tile.classList.add('disabled');
+    list.style.display = 'none';
+  }
+}
+
+function renderRolloutList() {
+  const rollouts = appData.rolloutProjects.filter(p => p.status === 'active');
+  const items = document.getElementById('rolloutItems');
+  items.innerHTML = rollouts.map(p => `
+    <div class="store-item" onclick="selectRolloutProject('${p.id}')">
+      <div>
+        <div class="si-name">${esc(p.name)}</div>
+        <div class="si-code">${esc(p.from)} – ${esc(p.to)}</div>
+      </div>
+      <div style="color:var(--muted);font-size:18px">›</div>
+    </div>
+  `).join('');
+}
+
+function selectRolloutProject(id) {
+  currentRolloutProject = appData.rolloutProjects.find(p => p.id === id);
+  if (!currentRolloutProject) return;
+  document.getElementById('rolloutProjName').textContent = currentRolloutProject.name;
+  renderRolloutStoreList();
+  showScreen('sRolloutStores');
+}
+
+function renderRolloutStoreList() {
+  const el = document.getElementById('rolloutStoreList');
+  if (!currentRolloutProject?.stores?.length) {
+    el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--muted);">Žiadne predajne.</div>';
+    return;
+  }
+  el.innerHTML = currentRolloutProject.stores.map(s => {
+    const done = appData.reports.some(r => r.rolloutProjectId === currentRolloutProject.id && r.storeId === s.id && r.completed);
+    return `
+      <div class="store-item" onclick="startRolloutInstall('${s.id}')">
+        <div>
+          <div class="si-name">${esc(s.name)}</div>
+          <div class="si-code">Kód: ${esc(s.code)}</div>
+        </div>
+        <span class="si-status ${done ? 'done' : 'pending'}">${done ? 'Hotovo' : 'Čaká'}</span>
+      </div>
+    `;
+  }).join('');
+}
+
+// ================================================================
+// ROLLOUT INSTALLATION
+// ================================================================
+const ROLLOUT_STEPS = [
+  { id: 'arrival',   title: 'Príchod',            icon: '📍', type: 'auto' },
+  { id: 'contact',   title: 'Kontakt vedúceho',   icon: '🤝', type: 'contact' },
+  { id: 'photoPred', title: 'Foto PRED',           icon: '📸', type: 'photo', key: 'predPhotos' },
+  { id: 'install',   title: 'Inštalácia',          icon: '🔧', type: 'checklist' },
+  { id: 'photoPost', title: 'Foto PO',             icon: '📸', type: 'photo', key: 'poPhotos' },
+  { id: 'rapport',   title: 'Rapport',             icon: '📋', type: 'photo', key: 'rapportPhotos' },
+  { id: 'finish',    title: 'Ukončenie',           icon: '✅', type: 'finish' }
+];
+
+function startRolloutInstall(storeId) {
+  currentRolloutStore = currentRolloutProject.stores.find(s => s.id === storeId);
+  if (!currentRolloutStore) return;
+
+  rolloutStepIndex = 0;
+  rolloutArrivalTime = new Date();
+  rolloutGPS = null;
+  rolloutStepData = {
+    vedouciMeno: '', vedouciNote: '',
+    predPhotos: [], checksInstall: new Array(currentRolloutStore.components?.length || 0).fill(false),
+    poPhotos: [], rapportPhotos: []
+  };
+
+  document.getElementById('rInstallProjLabel').textContent = currentRolloutProject.name;
+  document.getElementById('rInstallStoreName').textContent = currentRolloutStore.name;
+  document.getElementById('rTime').textContent = fmtTime(rolloutArrivalTime);
+  document.getElementById('rGPS').textContent = 'Získavam...';
+  document.getElementById('rTechnik').textContent = currentUser.name;
+
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(
+      pos => { rolloutGPS = { lat: pos.coords.latitude.toFixed(5), lng: pos.coords.longitude.toFixed(5) }; document.getElementById('rGPS').textContent = rolloutGPS.lat + ', ' + rolloutGPS.lng; },
+      () => { document.getElementById('rGPS').textContent = 'Nedostupné'; }
+    );
+  }
+
+  renderRolloutStep();
+  showScreen('sRolloutInstall');
+}
+
+function renderRolloutStep() {
+  updateRolloutProgress();
+  renderRolloutDots();
+  renderRolloutStepContent();
+}
+
+function updateRolloutProgress() {
+  const total = ROLLOUT_STEPS.length;
+  document.getElementById('rProgText').textContent = rolloutStepIndex + ' / ' + total;
+  document.getElementById('rProgFill').style.width = ((rolloutStepIndex / total) * 100) + '%';
+}
+
+function renderRolloutDots() {
+  const wrap = document.getElementById('rStepDots');
+  let html = '';
+  ROLLOUT_STEPS.forEach((s, i) => {
+    if (i > 0) html += '<div class="sline ' + (i <= rolloutStepIndex ? 'done' : '') + '"></div>';
+    const cls = i < rolloutStepIndex ? 'done' : (i === rolloutStepIndex ? 'active' : 'wait');
+    html += '<div class="sdot ' + cls + '">' + (i < rolloutStepIndex ? '✓' : (i+1)) + '</div>';
+  });
+  wrap.innerHTML = html;
+}
+
+function renderRolloutStepContent() {
+  const step = ROLLOUT_STEPS[rolloutStepIndex];
+  const el = document.getElementById('rStepContent');
+  const i = rolloutStepIndex;
+
+  if (step.type === 'auto') {
+    el.innerHTML = `
+      <div class="card">
+        <div class="step-number">Krok ${i+1} z ${ROLLOUT_STEPS.length}</div>
+        <div class="step-title">${step.icon} ${step.title}</div>
+        <div class="info-chips">
+          <div class="chip"><div class="cl">Čas príchodu</div><div class="cv">${fmtTime(rolloutArrivalTime)}</div></div>
+          <div class="chip"><div class="cl">GPS</div><div class="cv" style="font-size:11px">${rolloutGPS ? rolloutGPS.lat+', '+rolloutGPS.lng : 'Získavam...'}</div></div>
+        </div>
+        <div class="chip" style="margin-top:8px"><div class="cl">Predajňa</div><div class="cv">${esc(currentRolloutStore.name)} (${esc(currentRolloutStore.code)})</div></div>
+      </div>
+      <button class="btn btn-primary" onclick="nextRolloutStep()">Pokračovať →</button>`;
+  }
+  else if (step.type === 'contact') {
+    el.innerHTML = `
+      <div class="card">
+        <div class="step-number">Krok ${i+1} z ${ROLLOUT_STEPS.length}</div>
+        <div class="step-title">${step.icon} ${step.title}</div>
+        <div class="fg">
+          <label>Meno vedúceho *</label>
+          <input type="text" id="rVedouciMeno" value="${esc(rolloutStepData.vedouciMeno)}" placeholder="Meno a priezvisko" oninput="rolloutStepData.vedouciMeno=this.value;validateRolloutContact()">
+        </div>
+        <div class="fg">
+          <label>Poznámka</label>
+          <textarea id="rVedouciNote" rows="3" placeholder="Voliteľná poznámka..." oninput="rolloutStepData.vedouciNote=this.value">${esc(rolloutStepData.vedouciNote)}</textarea>
+        </div>
+      </div>
+      <button class="btn btn-primary" id="btnRContact" onclick="nextRolloutStep()" ${rolloutStepData.vedouciMeno ? '' : 'disabled'}>Pokračovať →</button>`;
+  }
+  else if (step.type === 'photo') {
+    const photos = rolloutStepData[step.key];
+    const isRapport = step.key === 'rapportPhotos';
+    const required = isRapport ? 1 : 1;
+    el.innerHTML = `
+      <div class="card">
+        <div class="step-number">Krok ${i+1} z ${ROLLOUT_STEPS.length}</div>
+        <div class="step-title">${step.icon} ${step.title}</div>
+        <label class="upload-area">
+          <input type="file" accept="image/*" multiple capture="environment" onchange="addRolloutPhotos('${step.key}', this)">
+          <div class="ua-icon">📷</div>
+          <div class="ua-text"><strong>Pridať fotografie</strong><br>${photos.length} foto pridaných</div>
+        </label>
+        <div class="photos-grid" id="rPhotoGrid_${step.key}">
+          ${photos.map((p,pi) => `<div class="photo-thumb"><img src="${p.data}"><button class="rm" onclick="removeRolloutPhoto('${step.key}',${pi})">✕</button></div>`).join('')}
+        </div>
+      </div>
+      <button class="btn btn-primary" id="btnRPhoto" onclick="nextRolloutStep()" ${photos.length >= required ? '' : 'disabled'}>
+        ${rolloutStepIndex === ROLLOUT_STEPS.length - 2 ? 'Pokračovať →' : 'Pokračovať →'}
+      </button>`;
+  }
+  else if (step.type === 'checklist') {
+    const comps = currentRolloutStore.components || [];
+    el.innerHTML = `
+      <div class="card">
+        <div class="step-number">Krok ${i+1} z ${ROLLOUT_STEPS.length}</div>
+        <div class="step-title">${step.icon} ${step.title}</div>
+        <ul class="check-list">
+          ${comps.map((c, ci) => `
+            <li class="check-item" onclick="toggleRolloutCheck(${ci})">
+              <div class="check-box ${rolloutStepData.checksInstall[ci] ? 'checked' : ''}"></div>
+              <div>
+                <div class="check-label ${rolloutStepData.checksInstall[ci] ? 'checked' : ''}">${esc(c.label)}</div>
+                <div style="font-size:12px;color:var(--muted)">Počet: ${c.count}</div>
+              </div>
+            </li>
+          `).join('')}
+        </ul>
+      </div>
+      <button class="btn btn-primary" id="btnRChecks" onclick="nextRolloutStep()" ${rolloutStepData.checksInstall.every(Boolean) ? '' : 'disabled'}>Pokračovať →</button>`;
+  }
+  else if (step.type === 'finish') {
+    el.innerHTML = `
+      <div class="card">
+        <div class="step-number">Krok ${i+1} z ${ROLLOUT_STEPS.length}</div>
+        <div class="step-title">${step.icon} ${step.title}</div>
+        <p style="color:var(--muted);font-size:14px;margin-bottom:16px">Skontroluj kompletnosť všetkých krokov a dokonči inštaláciu.</p>
+        <div class="info-chips">
+          <div class="chip"><div class="cl">Predajňa</div><div class="cv">${esc(currentRolloutStore.name)}</div></div>
+          <div class="chip"><div class="cl">Vedúci</div><div class="cv">${esc(rolloutStepData.vedouciMeno)}</div></div>
+        </div>
+      </div>
+      <button class="btn btn-ok" onclick="finishRollout()">🏁 Dokončiť a odoslať report</button>`;
+  }
+}
+
+function validateRolloutContact() {
+  const btn = document.getElementById('btnRContact');
+  if (btn) btn.disabled = !rolloutStepData.vedouciMeno.trim();
+}
+
+function toggleRolloutCheck(idx) {
+  rolloutStepData.checksInstall[idx] = !rolloutStepData.checksInstall[idx];
+  renderRolloutStepContent();
+}
+
+function addRolloutPhotos(key, input) {
+  const files = Array.from(input.files);
+  let loaded = 0;
+  files.forEach(file => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const MAX = 900;
+      let w = img.width, h = img.height;
+      if (w > MAX || h > MAX) {
+        if (w > h) { h = Math.round(h * MAX / w); w = MAX; } else { w = Math.round(w * MAX / h); h = MAX; }
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      rolloutStepData[key].push({ data: canvas.toDataURL('image/jpeg', 0.65), name: file.name });
+      URL.revokeObjectURL(url);
+      loaded++;
+      if (loaded === files.length) renderRolloutStepContent();
+    };
+    img.src = url;
+  });
+}
+
+function removeRolloutPhoto(key, idx) {
+  rolloutStepData[key].splice(idx, 1);
+  renderRolloutStepContent();
+}
+
+function nextRolloutStep() {
+  rolloutStepIndex++;
+  renderRolloutStep();
+  window.scrollTo(0, 0);
+}
+
+function confirmLeaveRollout() { openModal('mLeaveRollout'); }
+function leaveRollout() { closeModal('mLeaveRollout'); showScreen('sRolloutStores'); }
+
+async function finishRollout() {
+  const endTime = new Date();
+  setSending(true, 'Generujem PDF report...');
+  try {
+    const pdfBase64 = await generateRolloutPDF(endTime);
+    setSending(true, 'Odosielam email...');
+    await sendWebhookRollout({
+      to_email: currentRolloutProject.email,
+      project_name: currentRolloutProject.name,
+      store_name: currentRolloutStore.name,
+      store_code: currentRolloutStore.code,
+      arrival_time: fmtDateTime(rolloutArrivalTime),
+      finish_time: fmtDateTime(endTime),
+      duration: Math.round((endTime - rolloutArrivalTime)/60000) + ' minut',
+      technik: currentUser.name,
+      vedouci: rolloutStepData.vedouciMeno,
+      gps: rolloutGPS ? rolloutGPS.lat + ', ' + rolloutGPS.lng : 'nedostupne',
+      photo_count: rolloutStepData.predPhotos.length + rolloutStepData.poPhotos.length + rolloutStepData.rapportPhotos.length,
+      pdf_base64: pdfBase64,
+      pdf_filename: 'Rollout_' + currentRolloutStore.code + '_' + fmtDateFile(endTime) + '.pdf'
+    });
+
+    appData.reports.push({
+      id: uid(), type: 'rollout',
+      rolloutProjectId: currentRolloutProject.id,
+      storeId: currentRolloutStore.id,
+      storeName: currentRolloutStore.name,
+      storeCode: currentRolloutStore.code,
+      projectName: currentRolloutProject.name,
+      technik: currentUser.name,
+      arrivalTime: rolloutArrivalTime?.toISOString(),
+      endTime: endTime.toISOString(),
+      gps: rolloutGPS,
+      photoCount: rolloutStepData.predPhotos.length + rolloutStepData.poPhotos.length + rolloutStepData.rapportPhotos.length,
+      completed: true
+    });
+    saveLocal(); syncCloud();
+
+    setSending(false);
+    document.getElementById('rDoneStore').textContent = currentRolloutStore.name;
+    document.getElementById('rDoneTime').textContent = fmtDateTime(endTime);
+    renderRolloutStoreList();
+    showToast('Report odoslaný! ✓', 'ok');
+    showScreen('sRolloutDone');
+  } catch(e) {
+    setSending(false);
+    showToast('Chyba: ' + e.message, 'err');
+  }
+}
+
+async function sendWebhookRollout(payload) {
+  const url = HARDCODED.webhookUrl;
+  const res = await fetch('/.netlify/functions/send', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ webhookUrl: url, payload })
+  });
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+}
+
+// ================================================================
+// ROLLOUT PDF
+// ================================================================
+async function generateRolloutPDF(endTime) {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
+  const W = 210, M = 14;
+  let y = 0;
+
+  const t = (s) => String(s||'').replace(/[čĎĺľňŕšťž]/gi, c => ({'č':'c','Ď':'D','ĺ':'l','ľ':'L','ň':'n','ŕ':'r','š':'s','ť':'t','ž':'z','Č':'C','Š':'S','Ž':'Z','Ň':'N','Ŕ':'R','Ť':'T'}[c]||c)).replace(/[áéíóúýäöü]/g, c => ({'á':'a','é':'e','í':'i','ó':'o','ú':'u','ý':'y','ä':'a','ö':'o','ü':'u'}[c]||c)).replace(/[ÁÉÍÓÚÝÄÖÜ]/g, c => ({'Á':'A','É':'E','Í':'I','Ó':'O','Ú':'U','Ý':'Y','Ä':'A','Ö':'O','Ü':'U'}[c]||c));
+
+  // Header
+  doc.setFillColor(20,20,20); doc.rect(0,0,W,22,'F');
+  doc.setFillColor(220,30,30); doc.rect(0,22,W,2,'F');
+  doc.setTextColor(220,30,30); doc.setFontSize(18); doc.setFont('helvetica','bold');
+  doc.text('INSTRACK', M, 15);
+  doc.setFontSize(8); doc.setFont('helvetica','normal'); doc.setTextColor(180,180,180);
+  doc.text('Rollout report', M+42, 15);
+  doc.setTextColor(255,255,255); doc.text(fmtDateTime(endTime), W-M, 15, {align:'right'});
+  y = 30;
+
+  // Info box
+  const dur = Math.round((endTime - rolloutArrivalTime)/60000);
+  doc.setFillColor(252,252,252); doc.setDrawColor(20,20,20); doc.setLineWidth(0.5);
+  doc.roundedRect(M, y, W-2*M, 42, 3, 3, 'FD');
+  doc.setFillColor(220,30,30); doc.roundedRect(M, y, 3, 42, 1, 1, 'F');
+  const fields = [
+    ['Projekt', t(currentRolloutProject.name)], ['Predajna', t(currentRolloutStore.name)],
+    ['Kod predajne', t(currentRolloutStore.code)], ['Technik', t(currentUser.name)],
+    ['Vedouci', t(rolloutStepData.vedouciMeno)], ['GPS', rolloutGPS ? rolloutGPS.lat+', '+rolloutGPS.lng : 'nedostupne'],
+    ['Prichod', fmtDateTime(rolloutArrivalTime)], ['Ukoncenie', fmtDateTime(endTime)],
+    ['Trvanie', dur+' minut'], ['Fotografie', (rolloutStepData.predPhotos.length+rolloutStepData.poPhotos.length+rolloutStepData.rapportPhotos.length)+' ks']
+  ];
+  fields.slice(0,6).forEach((f,i) => {
+    const col = i%2, row = Math.floor(i/2);
+    const xx = M+8+col*88, yy = y+10+row*11;
+    doc.setFontSize(7.5); doc.setFont('helvetica','bold'); doc.setTextColor(150,150,150);
+    doc.text(f[0].toUpperCase(), xx, yy);
+    doc.setFontSize(9); doc.setFont('helvetica','bold'); doc.setTextColor(30,30,30);
+    doc.text(f[1], xx, yy+5);
+  });
+  y += 50;
+
+  // Components
+  if (currentRolloutStore.components?.length) {
+    doc.setFillColor(20,20,20); doc.rect(M, y, W-2*M, 9, 'F');
+    doc.setFillColor(220,30,30); doc.rect(M, y, 3, 9, 'F');
+    doc.setTextColor(255,255,255); doc.setFontSize(8.5); doc.setFont('helvetica','bold');
+    doc.text('INSTALACIE - KOMPONENTY', M+6, y+6); y += 13;
+    currentRolloutStore.components.forEach((c,i) => {
+      doc.setFontSize(9); doc.setFont('helvetica','normal'); doc.setTextColor(30,30,30);
+      const check = rolloutStepData.checksInstall[i] ? '☑' : '☐';
+      doc.text(check + ' ' + t(c.label) + ': ' + c.count + ' ks', M+4, y); y += 7;
+    });
+    y += 4;
+  }
+
+  // Photos
+  const addPhotoSec = async (title, photos) => {
+    if (!photos.length) return;
+    if (y > 240) { doc.addPage(); y = 16; }
+    doc.setFillColor(20,20,20); doc.rect(M, y, W-2*M, 9, 'F');
+    doc.setFillColor(220,30,30); doc.rect(M, y, 3, 9, 'F');
+    doc.setTextColor(255,255,255); doc.setFontSize(8.5); doc.setFont('helvetica','bold');
+    doc.text(title, M+6, y+6); y += 13;
+    const FIXED = 90, GAP = 5, COL_GAP = 6, MAX_H = 272;
+    let col = 0, rowH = 0;
+    for (const photo of photos) {
+      const imgEl = new Image();
+      await new Promise(res => { imgEl.onload = res; imgEl.src = photo.data; });
+      const iw = imgEl.naturalWidth||imgEl.width, ih = imgEl.naturalHeight||imgEl.height;
+      const land = iw >= ih;
+      let dW = land ? FIXED : Math.round(iw/ih*FIXED);
+      let dH = land ? Math.round(ih/iw*FIXED) : FIXED;
+      if (col===2||(col===1&&!land)) { y+=rowH+GAP; col=0; rowH=0; }
+      if (y+dH > MAX_H) { doc.addPage(); y=16; col=0; rowH=0; }
+      try { doc.addImage(photo.data,'JPEG',M+col*(FIXED+COL_GAP),y,dW,dH); } catch(e){}
+      rowH=Math.max(rowH,dH); col++;
+      if (!land) { y+=rowH+GAP; col=0; rowH=0; }
+    }
+    if (col>0) y+=rowH+GAP; y+=4;
+  };
+
+  await addPhotoSec('STAV PRED INSTALÁCIOU', rolloutStepData.predPhotos);
+  await addPhotoSec('STAV PO INSTALÁCII', rolloutStepData.poPhotos);
+  await addPhotoSec('RAPPORT', rolloutStepData.rapportPhotos);
+
+  const total = doc.internal.getNumberOfPages();
+  for (let p=1;p<=total;p++) {
+    doc.setPage(p);
+    doc.setDrawColor(220,30,30); doc.setLineWidth(1); doc.line(M,289,W-M,289);
+    doc.setFontSize(7); doc.setTextColor(150,150,150); doc.setFont('helvetica','normal');
+    doc.text('Strana '+p+' / '+total+'   |   '+t(currentRolloutProject.name)+'   |   '+t(currentRolloutStore.name), W/2, 293, {align:'center'});
+  }
+  return doc.output('datauristring').split(',')[1];
+}
+
+// ================================================================
+// XLS IMPORT
+// ================================================================
+function importXLS(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const data = new Uint8Array(e.target.result);
+    const wb = XLSX.read(data, { type: 'array' });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
+
+    // Get data from row 11+ (index 10)
+    xlsRawData = rows.slice(10).filter(r => r && r[2] !== null && r[2] !== undefined);
+
+    // Get unique values of column C (index 2)
+    const cVals = [...new Set(xlsRawData.map(r => r[2]).filter(v => v !== null))].sort();
+    const sel = document.getElementById('xlsFilterVal');
+    sel.innerHTML = cVals.map(v => `<option value="${v}" ${v==5?'selected':''}>${v}</option>`).join('');
+
+    document.getElementById('xlsPreview').style.display = 'block';
+    updateXLSPreview();
+    sel.onchange = updateXLSPreview;
+
+    // Render component name inputs
+    renderCompNameInputs();
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function renderCompNameInputs() {
+  const wrap = document.getElementById('xlsCompNames');
+  const cols = ['J','K','L','M','N'];
+  wrap.innerHTML = cols.map((c,i) => `
+    <div class="fg" style="margin-bottom:8px">
+      <label style="font-size:12px">Stĺpec ${c}</label>
+      <input type="text" id="compLabel_${i}" value="${xlsCompLabels[i]}" placeholder="Názov komponentu" oninput="xlsCompLabels[${i}]=this.value">
+    </div>
+  `).join('');
+}
+
+function updateXLSPreview() {
+  const filterVal = parseFloat(document.getElementById('xlsFilterVal').value) || document.getElementById('xlsFilterVal').value;
+  const filtered = xlsRawData.filter(r => r[2] == filterVal);
+  document.getElementById('xlsStoreCount').textContent = 'Nájdených predajní: ' + filtered.length;
+}
+
+function getXLSStores() {
+  if (!xlsRawData.length) return null;
+  const filterVal = parseFloat(document.getElementById('xlsFilterVal')?.value) || document.getElementById('xlsFilterVal')?.value;
+  const filtered = xlsRawData.filter(r => r[2] == filterVal);
+  const compCols = [9,10,11,12,13]; // J,K,L,M,N (0-indexed)
+  return filtered.map(r => ({
+    id: uid(),
+    code: String(r[3] || ''),
+    name: String(r[4] || ''),
+    components: compCols.map((ci,i) => ({
+      label: xlsCompLabels[i],
+      count: r[ci] || 0
+    })).filter(c => c.count > 0)
+  }));
+}
+
+function toggleManualStores() {
+  const el = document.getElementById('rProjStoresManual');
+  el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
+
+// ================================================================
+// ROLLOUT ADMIN CRUD
+// ================================================================
+function renderRolloutAdminList() {
+  const el = document.getElementById('rolloutProjList');
+  if (!appData.rolloutProjects.length) {
+    el.innerHTML = '<div style="text-align:center;padding:20px;color:var(--muted);">Žiadne Rollout projekty.</div>';
+    return;
+  }
+  el.innerHTML = appData.rolloutProjects.map(p => `
+    <div class="proj-item">
+      <div class="proj-item-hdr">
+        <div>
+          <div class="proj-item-name">${esc(p.name)}</div>
+          <div class="proj-item-meta">${esc(p.from)} – ${esc(p.to)} &nbsp;|&nbsp; 📬 ${esc(p.email)} &nbsp;|&nbsp; 🏪 ${p.stores?.length||0} predajní</div>
+          <div class="proj-item-meta" style="margin-top:4px"><span class="tag ${p.status==='active'?'tag-ok':'tag-warn'}">${p.status==='active'?'Aktívny':'Neaktívny'}</span></div>
+        </div>
+        <div class="proj-actions">
+          <button class="btn btn-outline btn-sm" onclick="toggleRolloutStatus('${p.id}')">${p.status==='active'?'Deaktivovať':'Aktivovať'}</button>
+          <button class="btn-del" onclick="deleteRolloutProject('${p.id}')">✕</button>
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function saveRolloutProject() {
+  const name = document.getElementById('rProjName').value.trim();
+  const from = document.getElementById('rProjFrom').value;
+  const to = document.getElementById('rProjTo').value;
+  const email = document.getElementById('rProjEmail').value.trim();
+
+  if (!name || !email) { showToast('Vyplň názov a email', 'err'); return; }
+
+  let stores = getXLSStores();
+  if (!stores) {
+    // Manual input
+    const txt = document.getElementById('rProjStoresText')?.value || '';
+    stores = txt.split('\n').filter(Boolean).map(line => {
+      const [code, name] = line.split('|').map(s => s.trim());
+      return { id: uid(), code: code||'', name: name||code||'', components: [] };
+    });
+  }
+  if (!stores.length) { showToast('Pridaj aspoň jednu predajňu', 'err'); return; }
+
+  const id = document.getElementById('editRolloutId').value;
+  if (id) {
+    const idx = appData.rolloutProjects.findIndex(p => p.id === id);
+    if (idx >= 0) appData.rolloutProjects[idx] = { ...appData.rolloutProjects[idx], name, from, to, email, stores };
+  } else {
+    appData.rolloutProjects.push({ id: uid(), name, from, to, email, stores, status: 'active', createdAt: new Date().toISOString() });
+  }
+
+  saveLocal(); syncCloud();
+  closeModal('mNewRollout');
+  renderRolloutAdminList();
+  renderDashboard();
+  showToast('Rollout projekt uložený ✓', 'ok');
+
+  // Reset form
+  xlsRawData = [];
+  document.getElementById('xlsPreview').style.display = 'none';
+}
+
+function toggleRolloutStatus(id) {
+  const p = appData.rolloutProjects.find(p => p.id === id);
+  if (p) { p.status = p.status === 'active' ? 'inactive' : 'active'; saveLocal(); syncCloud(); renderRolloutAdminList(); renderDashboard(); }
+}
+
+function deleteRolloutProject(id) {
+  if (!confirm('Vymazať Rollout projekt?')) return;
+  appData.rolloutProjects = appData.rolloutProjects.filter(p => p.id !== id);
+  saveLocal(); syncCloud(); renderRolloutAdminList(); renderDashboard();
+  showToast('Projekt vymazaný');
+}
+
+// ================================================================
+// startNovy function
 // ================================================================
 function startNovy() {
   novyState = {
@@ -1048,12 +1848,14 @@ function switchTab(id, btn) {
   btn.classList.add('active');
   if (id === 'tReports') renderReports();
   if (id === 'tSettings') loadSettingsForm();
+  if (id === 'tRollout') renderRolloutAdminList();
 }
 
 function renderAdminPanel() {
   renderTechList();
   renderReports();
   loadSettingsForm();
+  renderRolloutAdminList();
 }
 
 // TECHNICIANS
