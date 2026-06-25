@@ -830,78 +830,148 @@ async function submitNovy() {
 async function generateNovyPDF(cislo, endTime) {
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
-  const W = 210, M = 16;
+  const W = 210, M = 14;
   let y = 0;
 
-  // Header
-  doc.setFillColor(26,26,46);
-  doc.rect(0,0,W,30,'F');
-  doc.setTextColor(232,80,10);
-  doc.setFontSize(16); doc.setFont('helvetica','bold');
-  doc.text('INŠTALAČNÝ REPORT', M, 14);
-  doc.setTextColor(255,255,255);
-  doc.setFontSize(9); doc.setFont('helvetica','normal');
-  doc.text('INSTRACK — Nová zákazka', M, 22);
-  doc.text(fmtDateTime(endTime), W-M, 22, {align:'right'});
-  y = 40;
+  // Helper: sanitize text for jsPDF (replace problematic chars)
+  const t = (s) => String(s||'')
+    .replace(/č/g,'c').replace(/Č/g,'C')
+    .replace(/š/g,'s').replace(/Š/g,'S')
+    .replace(/ž/g,'z').replace(/Ž/g,'Z')
+    .replace(/ď/g,'d').replace(/Ď/g,'D')
+    .replace(/ť/g,'t').replace(/Ť/g,'T')
+    .replace(/ň/g,'n').replace(/Ň/g,'N')
+    .replace(/ĺ/g,'l').replace(/Ľ/g,'L')
+    .replace(/ŕ/g,'r').replace(/Ŕ/g,'R')
+    .replace(/á/g,'a').replace(/Á/g,'A')
+    .replace(/é/g,'e').replace(/É/g,'E')
+    .replace(/í/g,'i').replace(/Í/g,'I')
+    .replace(/ó/g,'o').replace(/Ó/g,'O')
+    .replace(/ú/g,'u').replace(/Ú/g,'U')
+    .replace(/ý/g,'y').replace(/Ý/g,'Y')
+    .replace(/ä/g,'a').replace(/Ä/g,'A')
+    .replace(/ö/g,'o').replace(/Ö/g,'O')
+    .replace(/ü/g,'u').replace(/Ü/g,'U');
 
-  // Info box
-  doc.setFillColor(244,244,241);
-  doc.roundedRect(M, y, W-2*M, 36, 3, 3, 'F');
-  doc.setTextColor(26,26,46);
-  doc.setFontSize(10); doc.setFont('helvetica','bold');
-  const fields = [
-    ['Číslo zákazky:', cislo],
-    ['Technik:', currentUser.name],
-    ['Príchod:', fmtDateTime(novyState.arrivalTime)],
-    ['Ukončenie:', fmtDateTime(endTime)],
-    ['Trvanie:', `${Math.round((endTime-novyState.arrivalTime)/60000)} minút`],
-    ['GPS:', novyState.gps ? `${novyState.gps.lat}, ${novyState.gps.lng}` : 'nedostupné']
+  // ── HEADER ──
+  // Red top bar
+  doc.setFillColor(220, 30, 30);
+  doc.rect(0, 0, W, 22, 'F');
+  // White accent line
+  doc.setFillColor(255, 255, 255);
+  doc.rect(0, 22, W, 1.5, 'F');
+  // Logo text
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(18); doc.setFont('helvetica', 'bold');
+  doc.text('INSTRACK', M, 15);
+  // Subtitle
+  doc.setFontSize(8); doc.setFont('helvetica', 'normal');
+  doc.setTextColor(255, 220, 220);
+  doc.text('Instalačny report', M + 42, 15);
+  // Date right
+  doc.setTextColor(255, 255, 255);
+  doc.text(fmtDateTime(endTime), W - M, 15, { align: 'right' });
+
+  y = 30;
+
+  // ── INFO BOX ──
+  doc.setFillColor(252, 252, 252);
+  doc.setDrawColor(220, 30, 30);
+  doc.setLineWidth(0.5);
+  doc.roundedRect(M, y, W - 2*M, 42, 3, 3, 'FD');
+
+  // Red left accent
+  doc.setFillColor(220, 30, 30);
+  doc.roundedRect(M, y, 3, 42, 1, 1, 'F');
+
+  const dur = Math.round((endTime - novyState.arrivalTime) / 60000);
+  const infoFields = [
+    ['Cislo zakazky', t(cislo)],
+    ['Technik', t(currentUser.name)],
+    ['Prichod', fmtDateTime(novyState.arrivalTime)],
+    ['Ukoncenie', fmtDateTime(endTime)],
+    ['Trvanie', dur + ' minut'],
+    ['GPS', novyState.gps ? novyState.gps.lat + ', ' + novyState.gps.lng : 'nedostupne']
   ];
-  fields.forEach((f, i) => {
-    const row = Math.floor(i/2), col = i%2;
-    const xx = M+4 + col*(W/2-M);
-    const yy = y+8 + row*10;
-    doc.setFont('helvetica','bold');
-    doc.text(f[0], xx, yy);
-    doc.setFont('helvetica','normal');
-    doc.text(f[1], xx+28, yy);
+
+  infoFields.forEach((f, i) => {
+    const col = i % 2;
+    const row = Math.floor(i / 2);
+    const xx = M + 8 + col * 88;
+    const yy = y + 10 + row * 11;
+    doc.setFontSize(7.5); doc.setFont('helvetica', 'bold');
+    doc.setTextColor(150, 150, 150);
+    doc.text(f[0].toUpperCase(), xx, yy);
+    doc.setFontSize(9); doc.setFont('helvetica', 'bold');
+    doc.setTextColor(30, 30, 30);
+    doc.text(f[1], xx, yy + 5);
   });
-  y += 44;
 
-  // Photos
+  y += 50;
+
+  // ── PHOTO SECTIONS ──
   const addPhotoSection = async (title, photos) => {
-    if (photos.length === 0) return;
-    if (y > 220) { doc.addPage(); y = 20; }
-    doc.setFillColor(61,61,92);
-    doc.roundedRect(M, y, W-2*M, 8, 2, 2, 'F');
-    doc.setTextColor(255,255,255);
-    doc.setFontSize(9); doc.setFont('helvetica','bold');
-    doc.text(title, M+3, y+5.5);
-    y += 12;
+    if (!photos.length) return;
+    if (y > 240) { doc.addPage(); y = 16; }
 
-    const imgW = 82, imgH = 62, gap = 8;
-    let col = 0;
+    // Section header
+    doc.setFillColor(220, 30, 30);
+    doc.rect(M, y, W - 2*M, 9, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(8.5); doc.setFont('helvetica', 'bold');
+    doc.text(title, M + 4, y + 6);
+    y += 14;
+
+    const FIXED = 130; // 13cm
+    const GAP = 6;
+    const MAX_PAGE_H = 270;
+
     for (const photo of photos) {
-      if (y + imgH > 280) { doc.addPage(); y = 20; col = 0; }
-      const x = M + col*(imgW+gap);
-      try { doc.addImage(photo.data, 'JPEG', x, y, imgW, imgH); } catch(e) {}
-      col++;
-      if (col >= 2) { col = 0; y += imgH + 10; }
+      // Get image dimensions via canvas
+      const imgEl = new Image();
+      await new Promise(res => {
+        imgEl.onload = res;
+        imgEl.src = photo.data;
+      });
+      const iw = imgEl.naturalWidth || imgEl.width;
+      const ih = imgEl.naturalHeight || imgEl.height;
+      const landscape = iw >= ih;
+
+      let drawW, drawH;
+      if (landscape) {
+        // Landscape: fixed width 13cm
+        drawW = FIXED;
+        drawH = Math.round((ih / iw) * FIXED);
+      } else {
+        // Portrait: fixed height 13cm
+        drawH = FIXED;
+        drawW = Math.round((iw / ih) * FIXED);
+      }
+
+      if (y + drawH > MAX_PAGE_H) { doc.addPage(); y = 16; }
+
+      try {
+        doc.addImage(photo.data, 'JPEG', M, y, drawW, drawH);
+      } catch(e) {}
+
+      y += drawH + GAP;
     }
-    if (col > 0) y += imgH + 10;
-    y += 6;
+    y += 4;
   };
 
-  await addPhotoSection('STAV PRED INŠTALÁCIOU', novyState.predPhotos);
-  await addPhotoSection('STAV PO INŠTALÁCII', novyState.poPhotos);
+  await addPhotoSection('STAV PRED INSTALÁCIOU', novyState.predPhotos);
+  await addPhotoSection('STAV PO INSTALÁCII', novyState.poPhotos);
 
-  // Footer
+  // ── FOOTER ──
   const total = doc.internal.getNumberOfPages();
   for (let p = 1; p <= total; p++) {
     doc.setPage(p);
-    doc.setFontSize(7); doc.setTextColor(150,150,150); doc.setFont('helvetica','normal');
-    doc.text(`Strana ${p} / ${total}   |   Zákazka: ${cislo}   |   Technik: ${currentUser.name}`, W/2, 295, {align:'center'});
+    // Footer line
+    doc.setDrawColor(220, 30, 30);
+    doc.setLineWidth(0.5);
+    doc.line(M, 289, W - M, 289);
+    doc.setFontSize(7); doc.setTextColor(150, 150, 150); doc.setFont('helvetica', 'normal');
+    doc.text('Strana ' + p + ' / ' + total + '   |   Zakazka: ' + t(cislo) + '   |   Technik: ' + t(currentUser.name), W/2, 293, { align: 'center' });
   }
 
   return doc.output('datauristring').split(',')[1];
