@@ -223,6 +223,7 @@ textarea{resize:vertical;min-height:80px}
       <div class="pin-display" id="pinDisplay">––––</div>
       <div class="pin-grid" id="pinGrid"></div>
       <button class="btn btn-dark" onclick="pinSubmit()">Prihlásiť sa</button>
+      <button class="btn btn-outline mt8" onclick="showScreen('sAdminLogin')" style="font-size:13px;color:var(--muted)">🔐 Admin prístup</button>
     </div>
   </div>
 </div>
@@ -499,7 +500,7 @@ let appData = {
   technicians: [],
   reports: [],
   settings: {
-    adminPwd: 'admin123',
+    adminPwd: '1234',
     emailNovy: 'lengyel@bittner-print.com',
     binKey: HARDCODED.binKey,
     binId: HARDCODED.binId,
