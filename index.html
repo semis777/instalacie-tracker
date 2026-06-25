@@ -1114,14 +1114,18 @@ function renderReports() {
     el.innerHTML = '<div style="text-align:center;padding:24px;color:var(--muted);">Žiadne reporty.</div>';
     return;
   }
-  el.innerHTML = appData.reports.slice().reverse().map(r => `
+  const clearBtn = `<button class="btn btn-danger btn-sm" style="margin-bottom:14px" onclick="clearAllReports()">🗑 Vymazať všetky reporty</button>`;
+  el.innerHTML = clearBtn + appData.reports.slice().reverse().map(r => `
     <div class="rep-item">
       <div class="rep-hdr">
         <div>
           <div class="rep-name">${esc(r.cislo || r.storeName || '–')}</div>
           <div class="rep-meta">Technik: ${esc(r.technik || '–')}</div>
         </div>
-        <div class="rep-time">${r.endTime ? fmtDateTime(new Date(r.endTime)) : '–'}</div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <div class="rep-time">${r.endTime ? fmtDateTime(new Date(r.endTime)) : '–'}</div>
+          <button class="btn-del" onclick="deleteReport('${r.id}')">✕</button>
+        </div>
       </div>
       <div style="font-size:12px;color:var(--muted);">
         📸 ${r.photoCount || 0} foto &nbsp;|&nbsp;
@@ -1129,6 +1133,24 @@ function renderReports() {
       </div>
     </div>
   `).join('');
+}
+
+function deleteReport(id) {
+  if (!confirm('Vymazať tento report?')) return;
+  appData.reports = appData.reports.filter(r => r.id !== id);
+  saveLocal();
+  syncCloud();
+  renderReports();
+  showToast('Report vymazaný');
+}
+
+function clearAllReports() {
+  if (!confirm('Vymazať VŠETKY reporty? Táto akcia sa nedá vrátiť.')) return;
+  appData.reports = [];
+  saveLocal();
+  syncCloud();
+  renderReports();
+  showToast('Všetky reporty vymazané');
 }
 
 // SETTINGS
