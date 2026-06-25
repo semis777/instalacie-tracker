@@ -1,0 +1,1829 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Inštalačný Tracker</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<style>
+  :root {
+    --ink: #1a1a2e;
+    --ink-soft: #3d3d5c;
+    --paper: #f7f7f5;
+    --surface: #ffffff;
+    --accent: #e8500a;
+    --accent-light: #fff0eb;
+    --ok: #1a8a4a;
+    --ok-light: #e8f7ef;
+    --border: #ddddd8;
+    --muted: #8a8a8a;
+    --step-done: #1a8a4a;
+    --step-active: #e8500a;
+    --step-wait: #c8c8c4;
+    --radius: 12px;
+    --radius-sm: 8px;
+    --shadow: 0 2px 12px rgba(0,0,0,0.08);
+    --shadow-lg: 0 8px 32px rgba(0,0,0,0.12);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--paper);
+    color: var(--ink);
+    min-height: 100vh;
+    font-size: 16px;
+    line-height: 1.5;
+  }
+
+  /* ── HEADER ── */
+  .app-header {
+    background: var(--ink);
+    color: white;
+    padding: 14px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  }
+  .app-header .logo {
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+  .app-header .logo span { color: white; }
+  .btn-admin-toggle {
+    background: none;
+    border: 1px solid rgba(255,255,255,0.2);
+    color: rgba(255,255,255,0.7);
+    padding: 6px 12px;
+    border-radius: var(--radius-sm);
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .btn-admin-toggle:hover { background: rgba(255,255,255,0.1); color: white; }
+
+  /* ── SCREENS ── */
+  .screen { display: none; }
+  .screen.active { display: block; }
+
+  /* ── CONTAINER ── */
+  .container { max-width: 520px; margin: 0 auto; padding: 20px 16px 80px; }
+
+  /* ── CARDS ── */
+  .card {
+    background: var(--surface);
+    border-radius: var(--radius);
+    padding: 20px;
+    box-shadow: var(--shadow);
+    margin-bottom: 16px;
+  }
+  .card-title {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 12px;
+  }
+
+  /* ── BUTTONS ── */
+  .btn {
+    display: block;
+    width: 100%;
+    padding: 15px 20px;
+    border: none;
+    border-radius: var(--radius-sm);
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.18s;
+    text-align: center;
+  }
+  .btn-primary { background: var(--accent); color: white; }
+  .btn-primary:hover { background: #c94008; }
+  .btn-primary:active { transform: scale(0.98); }
+  .btn-secondary { background: var(--ink); color: white; }
+  .btn-secondary:hover { background: var(--ink-soft); }
+  .btn-ok { background: var(--ok); color: white; }
+  .btn-ok:hover { background: #156b3a; }
+  .btn-outline {
+    background: none;
+    border: 1.5px solid var(--border);
+    color: var(--ink-soft);
+  }
+  .btn-outline:hover { border-color: var(--ink); color: var(--ink); }
+  .btn-sm { padding: 10px 16px; font-size: 13px; border-radius: 6px; }
+  .btn-danger { background: #dc2626; color: white; }
+  .btn + .btn { margin-top: 10px; }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none !important; }
+
+  /* ── FORMS ── */
+  label { display: block; font-size: 13px; font-weight: 600; color: var(--ink-soft); margin-bottom: 6px; }
+  input[type=text], input[type=email], input[type=password], textarea, select {
+    width: 100%;
+    padding: 12px 14px;
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius-sm);
+    font-size: 15px;
+    background: var(--paper);
+    color: var(--ink);
+    transition: border-color 0.2s;
+    font-family: inherit;
+  }
+  input:focus, textarea:focus, select:focus {
+    outline: none;
+    border-color: var(--accent);
+    background: white;
+  }
+  textarea { resize: vertical; min-height: 80px; }
+  .form-group { margin-bottom: 16px; }
+  .form-hint { font-size: 11px; color: var(--muted); margin-top: 4px; }
+
+  /* ── PROJECT SELECTOR (Landing) ── */
+  .hero {
+    padding: 32px 0 8px;
+    text-align: center;
+  }
+  .hero-icon {
+    width: 64px; height: 64px;
+    background: var(--accent);
+    border-radius: 16px;
+    display: flex; align-items: center; justify-content: center;
+    margin: 0 auto 20px;
+    font-size: 28px;
+  }
+  .hero h1 { font-size: 22px; font-weight: 800; color: var(--ink); margin-bottom: 6px; }
+  .hero p { font-size: 14px; color: var(--muted); }
+
+  .project-list { list-style: none; }
+  .project-item {
+    background: var(--surface);
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px 18px;
+    margin-bottom: 10px;
+    cursor: pointer;
+    transition: all 0.18s;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  .project-item:hover { border-color: var(--accent); box-shadow: var(--shadow); }
+  .project-item .proj-dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    background: var(--ok);
+    flex-shrink: 0;
+  }
+  .project-item .proj-dot.inactive { background: var(--muted); }
+  .project-item .proj-name { font-weight: 700; font-size: 15px; }
+  .project-item .proj-period { font-size: 12px; color: var(--muted); }
+  .project-item .proj-arrow { margin-left: auto; color: var(--muted); font-size: 18px; }
+
+  /* ── STORE LIST ── */
+  .store-list { list-style: none; }
+  .store-item {
+    background: var(--surface);
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px 18px;
+    margin-bottom: 10px;
+    cursor: pointer;
+    transition: all 0.18s;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  .store-item:hover { border-color: var(--accent); box-shadow: var(--shadow); }
+  .store-item .store-name { font-weight: 700; font-size: 16px; }
+  .store-item .store-addr { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .store-item .store-status {
+    margin-left: auto;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 4px 10px;
+    border-radius: 20px;
+    flex-shrink: 0;
+  }
+  .store-item .store-status.done { background: var(--ok-light); color: var(--ok); }
+  .store-item .store-status.pending { background: var(--accent-light); color: var(--accent); }
+  .store-item .store-status.new { background: #f0f0f0; color: var(--muted); }
+
+  /* ── PROGRESS BAR ── */
+  .progress-wrap { margin-bottom: 24px; }
+  .progress-label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+  .progress-bar {
+    height: 6px;
+    background: var(--border);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 3px;
+    transition: width 0.4s ease;
+  }
+
+  /* ── STEP INDICATOR ── */
+  .step-indicator {
+    display: flex;
+    align-items: center;
+    margin-bottom: 24px;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    scrollbar-width: none;
+  }
+  .step-indicator::-webkit-scrollbar { display: none; }
+  .step-dot {
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px;
+    font-weight: 800;
+    flex-shrink: 0;
+    transition: all 0.2s;
+  }
+  .step-dot.done { background: var(--ok); color: white; }
+  .step-dot.active { background: var(--accent); color: white; box-shadow: 0 0 0 3px var(--accent-light); }
+  .step-dot.wait { background: var(--border); color: var(--muted); }
+  .step-line {
+    height: 2px;
+    flex: 1;
+    min-width: 8px;
+    background: var(--border);
+    transition: background 0.3s;
+  }
+  .step-line.done { background: var(--ok); }
+
+  /* ── STEP CONTENT ── */
+  .step-card {
+    background: var(--surface);
+    border-radius: var(--radius);
+    padding: 24px 20px;
+    box-shadow: var(--shadow);
+    margin-bottom: 16px;
+  }
+  .step-number {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 6px;
+  }
+  .step-title {
+    font-size: 20px;
+    font-weight: 800;
+    color: var(--ink);
+    margin-bottom: 16px;
+    line-height: 1.2;
+  }
+
+  /* ── CHECK ITEMS ── */
+  .check-list { list-style: none; }
+  .check-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    padding: 14px 0;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    transition: background 0.1s;
+    border-radius: 6px;
+    padding-left: 4px;
+  }
+  .check-item:last-child { border-bottom: none; }
+  .check-item:active { background: var(--paper); }
+  .check-box {
+    width: 26px; height: 26px;
+    border: 2px solid var(--border);
+    border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+    transition: all 0.18s;
+    margin-top: 1px;
+  }
+  .check-box.checked {
+    background: var(--ok);
+    border-color: var(--ok);
+    color: white;
+  }
+  .check-box.checked::after { content: '✓'; font-size: 14px; font-weight: 800; }
+  .check-label { font-size: 15px; color: var(--ink); line-height: 1.4; }
+  .check-label.checked { text-decoration: line-through; color: var(--muted); }
+
+  /* ── PHOTO UPLOAD ── */
+  .photo-upload-area {
+    border: 2px dashed var(--border);
+    border-radius: var(--radius);
+    padding: 24px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    margin-top: 12px;
+  }
+  .photo-upload-area:hover { border-color: var(--accent); background: var(--accent-light); }
+  .photo-upload-area input { display: none; }
+  .photo-upload-icon { font-size: 32px; margin-bottom: 8px; }
+  .photo-upload-text { font-size: 14px; color: var(--muted); }
+  .photo-upload-text strong { color: var(--ink); }
+
+  .photos-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    margin-top: 12px;
+  }
+  .photo-thumb {
+    aspect-ratio: 1;
+    border-radius: 8px;
+    overflow: hidden;
+    position: relative;
+  }
+  .photo-thumb img { width: 100%; height: 100%; object-fit: cover; }
+  .photo-thumb .remove-photo {
+    position: absolute;
+    top: 4px; right: 4px;
+    width: 22px; height: 22px;
+    background: rgba(0,0,0,0.6);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    font-size: 12px;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  /* ── ARRIVAL INFO ── */
+  .info-row {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+  .info-badge {
+    background: var(--paper);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 10px 14px;
+    flex: 1;
+    font-size: 12px;
+  }
+  .info-badge .label { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; }
+  .info-badge .value { font-weight: 700; font-size: 14px; margin-top: 2px; }
+
+  /* ── COMPLETION ── */
+  .completion-card {
+    text-align: center;
+    padding: 40px 20px;
+  }
+  .completion-icon {
+    font-size: 56px;
+    margin-bottom: 16px;
+    display: block;
+  }
+  .completion-card h2 { font-size: 24px; font-weight: 800; margin-bottom: 8px; }
+  .completion-card p { color: var(--muted); font-size: 14px; margin-bottom: 24px; }
+
+  /* ── ADMIN PANEL ── */
+  .admin-nav {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 20px;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    scrollbar-width: none;
+  }
+  .admin-nav::-webkit-scrollbar { display: none; }
+  .tab-btn {
+    padding: 8px 16px;
+    border: 1.5px solid var(--border);
+    border-radius: 20px;
+    background: none;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    color: var(--muted);
+    transition: all 0.18s;
+    flex-shrink: 0;
+  }
+  .tab-btn.active { background: var(--ink); color: white; border-color: var(--ink); }
+  .tab-btn:hover:not(.active) { border-color: var(--ink); color: var(--ink); }
+
+  .admin-section { display: none; }
+  .admin-section.active { display: block; }
+
+  /* ── STORES ADMIN ── */
+  .store-admin-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--border);
+    gap: 10px;
+  }
+  .store-admin-item:last-child { border-bottom: none; }
+  .store-admin-name { font-weight: 600; font-size: 14px; }
+  .store-admin-addr { font-size: 12px; color: var(--muted); }
+  .btn-icon {
+    width: 32px; height: 32px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+    background: #fee2e2;
+    color: #dc2626;
+    transition: background 0.18s;
+  }
+  .btn-icon:hover { background: #dc2626; color: white; }
+
+  /* ── REPORTS TABLE ── */
+  .report-item {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 14px 16px;
+    margin-bottom: 10px;
+  }
+  .report-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 8px;
+  }
+  .report-store { font-weight: 700; font-size: 15px; }
+  .report-time { font-size: 11px; color: var(--muted); }
+  .report-meta { font-size: 12px; color: var(--muted); }
+  .report-actions { display: flex; gap: 8px; margin-top: 10px; }
+
+  /* ── TOAST ── */
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%) translateY(80px);
+    background: var(--ink);
+    color: white;
+    padding: 12px 24px;
+    border-radius: 24px;
+    font-size: 14px;
+    font-weight: 600;
+    z-index: 9999;
+    transition: transform 0.3s ease;
+    white-space: nowrap;
+    box-shadow: var(--shadow-lg);
+    pointer-events: none;
+  }
+  .toast.show { transform: translateX(-50%) translateY(0); }
+  .toast.success { background: var(--ok); }
+  .toast.error { background: #dc2626; }
+
+  /* ── MODAL ── */
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 500;
+    align-items: flex-end;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal {
+    background: var(--surface);
+    border-radius: 20px 20px 0 0;
+    width: 100%;
+    max-height: 90vh;
+    overflow-y: auto;
+    padding: 24px 20px 40px;
+    animation: slideUp 0.3s ease;
+  }
+  @keyframes slideUp {
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
+  }
+  .modal-title {
+    font-size: 18px;
+    font-weight: 800;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .modal-close {
+    width: 30px; height: 30px;
+    border: none;
+    background: var(--paper);
+    border-radius: 50%;
+    font-size: 16px;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  /* ── LOGIN ── */
+  .login-wrap {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+  .login-card {
+    background: var(--surface);
+    border-radius: var(--radius);
+    padding: 32px 28px;
+    width: 100%;
+    max-width: 360px;
+    box-shadow: var(--shadow-lg);
+  }
+  .login-logo {
+    text-align: center;
+    margin-bottom: 28px;
+  }
+  .login-logo .icon {
+    width: 56px; height: 56px;
+    background: var(--accent);
+    border-radius: 14px;
+    margin: 0 auto 12px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 24px;
+  }
+  .login-logo h2 { font-size: 18px; font-weight: 800; }
+  .login-logo p { font-size: 12px; color: var(--muted); margin-top: 4px; }
+
+  /* ── UTILITY ── */
+  .text-muted { color: var(--muted); }
+  .text-sm { font-size: 13px; }
+  .mt-8 { margin-top: 8px; }
+  .mt-16 { margin-top: 16px; }
+  .hidden { display: none !important; }
+  .divider { height: 1px; background: var(--border); margin: 16px 0; }
+  .tag {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 700;
+  }
+  .tag-ok { background: var(--ok-light); color: var(--ok); }
+  .tag-warn { background: var(--accent-light); color: var(--accent); }
+
+  /* ── SENDING OVERLAY ── */
+  .sending-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(26,26,46,0.85);
+    z-index: 9000;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    color: white;
+    text-align: center;
+  }
+  .sending-overlay.open { display: flex; }
+  .spinner {
+    width: 48px; height: 48px;
+    border: 4px solid rgba(255,255,255,0.2);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin-bottom: 16px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .sending-overlay p { font-size: 15px; opacity: 0.9; }
+</style>
+</head>
+<body>
+
+<!-- ============================================================ -->
+<!-- SENDING OVERLAY -->
+<!-- ============================================================ -->
+<div class="sending-overlay" id="sendingOverlay">
+  <div class="spinner"></div>
+  <p id="sendingMsg">Generujem report...</p>
+</div>
+
+<!-- ============================================================ -->
+<!-- TOAST -->
+<!-- ============================================================ -->
+<div class="toast" id="toast"></div>
+
+<!-- ============================================================ -->
+<!-- HEADER -->
+<!-- ============================================================ -->
+<div class="app-header">
+  <div class="logo">INST<span>RACK</span></div>
+  <button class="btn-admin-toggle" onclick="showAdminLogin()">Admin</button>
+</div>
+
+<!-- ============================================================ -->
+<!-- SCREEN: PROJECT LIST (Landing) -->
+<!-- ============================================================ -->
+<div class="screen active" id="screenProjects">
+  <div class="container">
+    <div class="hero">
+      <div class="hero-icon">📋</div>
+      <h1>Inštalačný Tracker</h1>
+      <p>Vyber aktívny projekt</p>
+    </div>
+    <div class="card" style="margin-top:20px;">
+      <div class="card-title">Dostupné projekty</div>
+      <ul class="project-list" id="projectList">
+        <li style="text-align:center;padding:20px;color:var(--muted);font-size:14px;">Žiadne projekty. Admin musí pridať projekty.</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- SCREEN: STORE LIST -->
+<!-- ============================================================ -->
+<div class="screen" id="screenStores">
+  <div class="container">
+    <div style="display:flex;align-items:center;gap:12px;margin:16px 0;">
+      <button onclick="showScreen('screenProjects')" style="background:none;border:none;font-size:22px;cursor:pointer;">←</button>
+      <div>
+        <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);font-weight:700;">Projekt</div>
+        <div style="font-size:18px;font-weight:800;" id="storeProjectName">–</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Predajne — vyber miesto inštalácie</div>
+      <ul class="store-list" id="storeList"></ul>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- SCREEN: INSTALLATION STEPS -->
+<!-- ============================================================ -->
+<div class="screen" id="screenInstall">
+  <div class="container">
+
+    <!-- Top bar -->
+    <div style="display:flex;align-items:center;gap:10px;margin:16px 0 20px;">
+      <button onclick="confirmLeave()" style="background:none;border:none;font-size:22px;cursor:pointer;">←</button>
+      <div>
+        <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);font-weight:700;">Predajňa</div>
+        <div style="font-size:17px;font-weight:800;" id="installStoreName">–</div>
+      </div>
+    </div>
+
+    <!-- Arrival info -->
+    <div class="info-row" id="arrivalInfo">
+      <div class="info-badge">
+        <div class="label">Príchod</div>
+        <div class="value" id="arrivalTime">–</div>
+      </div>
+      <div class="info-badge">
+        <div class="label">GPS</div>
+        <div class="value" id="arrivalGPS" style="font-size:11px;">Získavam...</div>
+      </div>
+    </div>
+
+    <!-- Progress -->
+    <div class="progress-wrap">
+      <div class="progress-label">
+        <span>Postup</span>
+        <span id="progressText">0 / 7</span>
+      </div>
+      <div class="progress-bar"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+    </div>
+
+    <!-- Step dots -->
+    <div class="step-indicator" id="stepDots"></div>
+
+    <!-- Step content -->
+    <div id="stepContent"></div>
+
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- SCREEN: COMPLETION -->
+<!-- ============================================================ -->
+<div class="screen" id="screenDone">
+  <div class="container">
+    <div class="card completion-card">
+      <span class="completion-icon">✅</span>
+      <h2>Inštalácia dokončená!</h2>
+      <p>Report bol odoslaný emailom. Môžeš pokračovať na ďalšej predajni.</p>
+      <div class="info-badge" style="text-align:left;margin-bottom:16px;">
+        <div class="label">Čas ukončenia</div>
+        <div class="value" id="doneTime">–</div>
+      </div>
+      <button class="btn btn-primary" onclick="showScreen('screenStores')">Ďalšia predajňa</button>
+      <button class="btn btn-outline mt-8" onclick="showScreen('screenProjects')">Zmeniť projekt</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- SCREEN: ADMIN LOGIN -->
+<!-- ============================================================ -->
+<div class="screen" id="screenAdminLogin">
+  <div class="login-wrap">
+    <div class="login-card">
+      <div class="login-logo">
+        <div class="icon">🔐</div>
+        <h2>Admin prístup</h2>
+        <p>Prihlás sa pre správu projektov</p>
+      </div>
+      <div class="form-group">
+        <label>Heslo</label>
+        <input type="password" id="adminPwdInput" placeholder="Admin heslo" onkeydown="if(event.key==='Enter')doAdminLogin()">
+      </div>
+      <button class="btn btn-secondary" onclick="doAdminLogin()">Prihlásiť sa</button>
+      <button class="btn btn-outline mt-8" onclick="showScreen('screenProjects')">Späť</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- SCREEN: ADMIN PANEL -->
+<!-- ============================================================ -->
+<div class="screen" id="screenAdmin">
+  <div class="container">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin:16px 0 20px;">
+      <div>
+        <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);font-weight:700;">Správca</div>
+        <div style="font-size:20px;font-weight:800;">Admin Panel</div>
+      </div>
+      <button class="btn-outline btn btn-sm" style="width:auto;" onclick="adminLogout()">Odhlásiť</button>
+    </div>
+
+    <!-- Tabs -->
+    <div class="admin-nav">
+      <button class="tab-btn active" onclick="switchAdminTab('tabProjects',this)">Projekty</button>
+      <button class="tab-btn" onclick="switchAdminTab('tabReports',this)">Reporty</button>
+      <button class="tab-btn" onclick="switchAdminTab('tabSettings',this)">Nastavenia</button>
+    </div>
+
+    <!-- TAB: Projects -->
+    <div class="admin-section active" id="tabProjects">
+      <button class="btn btn-primary" style="margin-bottom:16px;" onclick="openNewProjectModal()">+ Nový projekt</button>
+      <div id="adminProjectList"></div>
+    </div>
+
+    <!-- TAB: Reports -->
+    <div class="admin-section" id="tabReports">
+      <div class="form-group">
+        <label>Filter podľa projektu</label>
+        <select id="reportFilterProject" onchange="renderReports()">
+          <option value="">Všetky projekty</option>
+        </select>
+      </div>
+      <div id="reportList"></div>
+    </div>
+
+    <!-- TAB: Settings -->
+    <div class="admin-section" id="tabSettings">
+      <div class="card">
+        <div class="card-title">JSONBin.io nastavenia</div>
+        <div class="form-group">
+          <label>Master Key (X-Master-Key)</label>
+          <input type="password" id="settingsBinKey" placeholder="$2b$10$...">
+          <div class="form-hint">Prednastavené. Meniť len ak sa API key zmení.</div>
+        </div>
+        <div class="form-group">
+          <label>Bin ID</label>
+          <input type="text" id="settingsBinId" placeholder="64abc123...">
+          <div class="form-hint">Prednastavené. Meniť len ak sa bin zmení.</div>
+        </div>
+        <button class="btn btn-secondary btn-sm" style="width:auto;" onclick="saveSettings()">Uložiť API nastavenia</button>
+      </div>
+      <div class="card mt-16">
+        <div class="card-title">Power Automate — odosielanie emailov</div>
+        <div class="form-group">
+          <label>Webhook URL</label>
+          <input type="text" id="settingsWebhookUrl" placeholder="https://prod-xx.westeurope.logic.azure.com/...">
+          <div class="form-hint">Skopíruj URL z Power Automate → HTTP trigger → "HTTP POST URL"</div>
+        </div>
+        <button class="btn btn-secondary btn-sm" style="width:auto;" onclick="saveSettings()">Uložiť Webhook URL</button>
+        <button class="btn btn-outline btn-sm mt-8" style="width:auto;" onclick="testWebhook()">Testovať spojenie</button>
+      </div>
+      <div class="card mt-16">
+        <div class="card-title">Admin heslo</div>
+        <div class="form-group">
+          <label>Nové heslo</label>
+          <input type="password" id="settingsNewPwd" placeholder="Nové heslo">
+        </div>
+        <button class="btn btn-outline btn-sm" style="width:auto;" onclick="changeAdminPwd()">Zmeniť heslo</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- MODAL: New / Edit Project -->
+<!-- ============================================================ -->
+<div class="modal-overlay" id="modalProject">
+  <div class="modal">
+    <div class="modal-title">
+      <span id="modalProjectTitle">Nový projekt</span>
+      <button class="modal-close" onclick="closeModal('modalProject')">✕</button>
+    </div>
+
+    <input type="hidden" id="editProjectId">
+
+    <div class="form-group">
+      <label>Názov projektu</label>
+      <input type="text" id="projName" placeholder="napr. Tiger Energy Q1 2025">
+    </div>
+    <div class="form-group">
+      <label>Obdobie od</label>
+      <input type="text" id="projFrom" placeholder="01.01.2025">
+    </div>
+    <div class="form-group">
+      <label>Obdobie do</label>
+      <input type="text" id="projTo" placeholder="31.03.2025">
+    </div>
+    <div class="form-group">
+      <label>Email pre reporty</label>
+      <input type="email" id="projEmail" placeholder="vedouci@firma.sk">
+    </div>
+    <div class="form-group">
+      <label>Predajne (každá na nový riadok, formát: Názov | Adresa)</label>
+      <textarea id="projStores" rows="6" placeholder="BILLA Košice | Hlavná 1, Košice&#10;TESCO Bratislava | Obchodná 5, Bratislava&#10;LIDL Žilina | Štefánikova 12, Žilina"></textarea>
+      <div class="form-hint">Formát: Názov predajne | Adresa</div>
+    </div>
+    <div class="form-group">
+      <label>Stav projektu</label>
+      <select id="projStatus">
+        <option value="active">Aktívny</option>
+        <option value="inactive">Neaktívny</option>
+      </select>
+    </div>
+
+    <button class="btn btn-primary" onclick="saveProject()">Uložiť projekt</button>
+    <button class="btn btn-outline mt-8" onclick="closeModal('modalProject')">Zrušiť</button>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- MODAL: Confirm leave -->
+<!-- ============================================================ -->
+<div class="modal-overlay" id="modalLeave">
+  <div class="modal">
+    <div class="modal-title">
+      <span>Opustiť inštaláciu?</span>
+      <button class="modal-close" onclick="closeModal('modalLeave')">✕</button>
+    </div>
+    <p style="color:var(--muted);font-size:14px;margin-bottom:20px;">Postup tejto predajne sa stratí. Naozaj chceš odísť?</p>
+    <button class="btn btn-danger" onclick="leaveInstall()">Áno, odísť</button>
+    <button class="btn btn-outline mt-8" onclick="closeModal('modalLeave')">Zostať</button>
+  </div>
+</div>
+
+<!-- Power Automate / no external SDK needed -->
+
+<script>
+// ================================================================
+// STATE
+// ================================================================
+let appData = {
+  projects: [],
+  reports: [],
+  settings: {
+    adminPwd: 'admin123',
+    binKey: '$2a$10$n/q.ffTg.17g.TaNGyMLPOTE23AgQUWjqlkISzaq1xaJVpVQUVH0S',
+    binId: '6a3cd316f5f4af5e292d4d04',
+    webhookUrl: 'https://hook.eu1.make.com/ap3cgawflnfloh9tvcaxg8xonxbic4bv'
+  }
+};
+
+let currentProject = null;
+let currentStore = null;
+let currentStepIndex = 0;
+let arrivalTime = null;
+let arrivalCoords = null;
+let stepPhotos = [[], [], [], [], [], [], []]; // photos per step
+let stepChecks = [[], [], [], [], [], [], []]; // checked items per step
+let stepDone = [false,false,false,false,false,false,false];
+
+// Step definitions
+const STEPS = [
+  {
+    title: 'Kontakt vedúceho predajne',
+    icon: '🤝',
+    checks: [
+      'Predstav sa vedúcemu predajne',
+      'Vysvetli účel návštevy',
+      'Získaj súhlas na vstup do predajne',
+      'Poznač meno zodpovednej osoby'
+    ],
+    hasPhoto: false,
+    notes: true
+  },
+  {
+    title: 'Inštalácia komponentov',
+    icon: '🔧',
+    checks: [
+      'Priprav potrebné náradie a materiál',
+      'Skontroluj miesto inštalácie',
+      'Inštaluj komponenty podľa plánu',
+      'Skontroluj stabilitu a správnosť inštalácie',
+      'Uprav a dofixuj podľa potreby'
+    ],
+    hasPhoto: false,
+    notes: false
+  },
+  {
+    title: 'Fotodokumentácia inštalácie',
+    icon: '📸',
+    checks: [
+      'Nafot celkový pohľad na inštaláciu',
+      'Nafot detailné zábery komponentov',
+      'Skontroluj kvalitu fotografií'
+    ],
+    hasPhoto: true,
+    notes: false
+  },
+  {
+    title: 'Odpratanie odpadu',
+    icon: '🗑️',
+    checks: [
+      'Zberi všetok obalový materiál',
+      'Uprac pracovný priestor',
+      'Odnes odpad do určeného miesta',
+      'Skontroluj čistotu okolia inštalácie'
+    ],
+    hasPhoto: false,
+    notes: false
+  },
+  {
+    title: 'Rapport — kontakt vedúceho',
+    icon: '📋',
+    checks: [
+      'Informuj vedúceho o dokončenej inštalácii',
+      'Ukáž výsledok práce',
+      'Vyžiadaj podpis / potvrdenie Rapportu',
+      'Vysvetli prípadné otázky'
+    ],
+    hasPhoto: false,
+    notes: true
+  },
+  {
+    title: 'Fotografia Rapportu',
+    icon: '📄',
+    checks: [
+      'Nafot podpísaný Rapport',
+      'Skontroluj čitateľnosť fotografie',
+      'Archivuj spolu s fotografiami inštalácie'
+    ],
+    hasPhoto: true,
+    notes: false
+  },
+  {
+    title: 'Ukončenie',
+    icon: '✅',
+    checks: [
+      'Skontroluj kompletnosť všetkých krokov',
+      'Rozlúč sa s vedúcim predajne',
+      'Potvrď ukončenie inštalácie'
+    ],
+    hasPhoto: false,
+    notes: false,
+    isFinal: true
+  }
+];
+
+// Step notes storage
+let stepNotes = ['','','','','','',''];
+
+// ================================================================
+// STORAGE
+// ================================================================
+function saveLocal() {
+  localStorage.setItem('instRackData', JSON.stringify(appData));
+}
+const HARDCODED = {
+  binKey: '$2a$10$n/q.ffTg.17g.TaNGyMLPOTE23AgQUWjqlkISzaq1xaJVpVQUVH0S',
+  binId: '6a3cd316f5f4af5e292d4d04',
+  webhookUrl: 'https://hook.eu1.make.com/ap3cgawflnfloh9tvcaxg8xonxbic4bv'
+};
+
+function loadLocal() {
+  const d = localStorage.getItem('instRackData');
+  if (d) {
+    try {
+      const parsed = JSON.parse(d);
+      appData = { ...appData, ...parsed };
+      // Always restore hardcoded credentials regardless of localStorage
+      appData.settings.binKey = HARDCODED.binKey;
+      appData.settings.binId = HARDCODED.binId;
+      appData.settings.webhookUrl = HARDCODED.webhookUrl;
+    } catch(e) {}
+  }
+}
+
+// ================================================================
+// JSONBin.io SYNC
+// ================================================================
+async function syncToCloud() {
+  const { binKey, binId } = appData.settings;
+  if (!binKey || !binId) return;
+  try {
+    await fetch(`https://api.jsonbin.io/v3/b/${binId}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Master-Key': binKey
+      },
+      body: JSON.stringify({ projects: appData.projects, reports: appData.reports })
+    });
+  } catch(e) { console.warn('Cloud sync failed', e); }
+}
+
+async function loadFromCloud() {
+  const { binKey, binId } = appData.settings;
+  if (!binKey || !binId) return;
+  try {
+    const r = await fetch(`https://api.jsonbin.io/v3/b/${binId}/latest`, {
+      headers: { 'X-Master-Key': binKey }
+    });
+    if (r.ok) {
+      const json = await r.json();
+      if (json.record) {
+        appData.projects = json.record.projects || [];
+        appData.reports = json.record.reports || [];
+        saveLocal();
+      }
+    }
+  } catch(e) { console.warn('Cloud load failed', e); }
+}
+
+// ================================================================
+// SCREENS
+// ================================================================
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  window.scrollTo(0, 0);
+}
+
+// ================================================================
+// PROJECTS (Landing)
+// ================================================================
+function renderProjectList() {
+  const ul = document.getElementById('projectList');
+  const active = appData.projects.filter(p => p.status === 'active');
+  if (active.length === 0) {
+    ul.innerHTML = '<li style="text-align:center;padding:24px;color:var(--muted);font-size:14px;">Žiadne aktívne projekty.<br>Admin musí pridať projekty.</li>';
+    return;
+  }
+  ul.innerHTML = active.map(p => `
+    <li class="project-item" onclick="selectProject('${p.id}')">
+      <div class="proj-dot ${p.status === 'active' ? '' : 'inactive'}"></div>
+      <div>
+        <div class="proj-name">${esc(p.name)}</div>
+        <div class="proj-period">${esc(p.from)} – ${esc(p.to)}</div>
+      </div>
+      <div class="proj-arrow">›</div>
+    </li>
+  `).join('');
+}
+
+function selectProject(id) {
+  currentProject = appData.projects.find(p => p.id === id);
+  if (!currentProject) return;
+  document.getElementById('storeProjectName').textContent = currentProject.name;
+  renderStoreList();
+  showScreen('screenStores');
+}
+
+// ================================================================
+// STORES
+// ================================================================
+function renderStoreList() {
+  const ul = document.getElementById('storeList');
+  if (!currentProject || !currentProject.stores?.length) {
+    ul.innerHTML = '<li style="padding:20px;text-align:center;color:var(--muted);">Projekt nemá žiadne predajne.</li>';
+    return;
+  }
+
+  ul.innerHTML = currentProject.stores.map(s => {
+    const done = appData.reports.some(r => r.projectId === currentProject.id && r.storeId === s.id && r.completed);
+    const statusText = done ? 'Hotovo' : 'Čaká';
+    const statusClass = done ? 'done' : 'new';
+    return `
+      <li class="store-item" onclick="selectStore('${s.id}')">
+        <div>
+          <div class="store-name">${esc(s.name)}</div>
+          <div class="store-addr">${esc(s.address)}</div>
+        </div>
+        <div class="store-status ${statusClass}">${statusText}</div>
+      </li>
+    `;
+  }).join('');
+}
+
+function selectStore(storeId) {
+  currentStore = currentProject.stores.find(s => s.id === storeId);
+  if (!currentStore) return;
+
+  // Reset state
+  currentStepIndex = 0;
+  stepPhotos = STEPS.map(() => []);
+  stepChecks = STEPS.map(s => new Array(s.checks.length).fill(false));
+  stepNotes = STEPS.map(() => '');
+  stepDone = new Array(STEPS.length).fill(false);
+
+  // Record arrival
+  arrivalTime = new Date();
+  arrivalCoords = null;
+
+  document.getElementById('installStoreName').textContent = currentStore.name;
+  document.getElementById('arrivalTime').textContent = fmtTime(arrivalTime);
+  document.getElementById('arrivalGPS').textContent = 'Získavam...';
+
+  // Get GPS
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(pos => {
+      arrivalCoords = { lat: pos.coords.latitude.toFixed(5), lng: pos.coords.longitude.toFixed(5) };
+      document.getElementById('arrivalGPS').textContent = `${arrivalCoords.lat}, ${arrivalCoords.lng}`;
+    }, () => {
+      document.getElementById('arrivalGPS').textContent = 'Nedostupné';
+    });
+  }
+
+  renderInstallStep();
+  showScreen('screenInstall');
+}
+
+// ================================================================
+// INSTALL STEPS
+// ================================================================
+function renderInstallStep() {
+  updateProgress();
+  renderStepDots();
+  renderStepContent();
+}
+
+function updateProgress() {
+  const done = stepDone.filter(Boolean).length;
+  const total = STEPS.length;
+  document.getElementById('progressText').textContent = `${done} / ${total}`;
+  document.getElementById('progressFill').style.width = `${(done/total)*100}%`;
+}
+
+function renderStepDots() {
+  const wrap = document.getElementById('stepDots');
+  let html = '';
+  STEPS.forEach((s, i) => {
+    if (i > 0) html += `<div class="step-line ${stepDone[i-1] ? 'done' : ''}"></div>`;
+    const cls = stepDone[i] ? 'done' : (i === currentStepIndex ? 'active' : 'wait');
+    html += `<div class="step-dot ${cls}" title="${s.title}">${stepDone[i] ? '✓' : (i+1)}</div>`;
+  });
+  wrap.innerHTML = html;
+}
+
+function renderStepContent() {
+  const step = STEPS[currentStepIndex];
+  const i = currentStepIndex;
+  const allChecked = stepChecks[i].every(Boolean);
+
+  let checksHtml = `<ul class="check-list">` + step.checks.map((c, ci) => `
+    <li class="check-item" onclick="toggleCheck(${i},${ci})">
+      <div class="check-box ${stepChecks[i][ci] ? 'checked' : ''}"></div>
+      <span class="check-label ${stepChecks[i][ci] ? 'checked' : ''}">${esc(c)}</span>
+    </li>
+  `).join('') + `</ul>`;
+
+  let photoHtml = '';
+  if (step.hasPhoto) {
+    const photos = stepPhotos[i];
+    photoHtml = `
+      <div class="divider"></div>
+      <div style="font-weight:700;font-size:14px;margin-bottom:4px;">📷 Fotografie (${photos.length})</div>
+      <label class="photo-upload-area">
+        <input type="file" accept="image/*" multiple capture="environment" onchange="addPhotos(${i}, this)">
+        <div class="photo-upload-icon">📷</div>
+        <div class="photo-upload-text"><strong>Pridať fotografie</strong><br>Klikni alebo odfot priamo</div>
+      </label>
+      ${photos.length ? `<div class="photos-grid">${photos.map((p,pi) => `
+        <div class="photo-thumb">
+          <img src="${p.data}" alt="foto">
+          <button class="remove-photo" onclick="removePhoto(${i},${pi},event)">✕</button>
+        </div>
+      `).join('')}</div>` : ''}
+    `;
+  }
+
+  let notesHtml = '';
+  if (step.notes) {
+    notesHtml = `
+      <div class="divider"></div>
+      <div class="form-group">
+        <label>Poznámky / meno zodpovednej osoby</label>
+        <textarea id="stepNote_${i}" rows="3" placeholder="Voliteľné poznámky..." onchange="stepNotes[${i}]=this.value">${stepNotes[i]}</textarea>
+      </div>
+    `;
+  }
+
+  let navHtml = '';
+  if (step.isFinal) {
+    navHtml = `<button class="btn btn-ok ${allChecked ? '' : 'hidden'}" id="btnFinish" onclick="finishInstall()">🏁 Dokončiť a odoslať report</button>`;
+  } else {
+    navHtml = `<button class="btn btn-primary ${allChecked ? '' : ''}" id="btnNext" onclick="nextStep()" ${allChecked ? '' : 'disabled'}>Ďalší krok →</button>`;
+  }
+
+  document.getElementById('stepContent').innerHTML = `
+    <div class="step-card">
+      <div class="step-number">Krok ${i+1} z ${STEPS.length}</div>
+      <div class="step-title">${step.icon} ${step.title}</div>
+      ${checksHtml}
+      ${photoHtml}
+      ${notesHtml}
+    </div>
+    ${navHtml}
+  `;
+}
+
+function toggleCheck(stepIdx, checkIdx) {
+  stepChecks[stepIdx][checkIdx] = !stepChecks[stepIdx][checkIdx];
+  renderStepContent();
+  renderStepDots();
+}
+
+function addPhotos(stepIdx, input) {
+  const files = Array.from(input.files);
+  let loaded = 0;
+  files.forEach(file => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      // Komprimuj na max 800px, kvalita 0.6
+      const MAX = 800;
+      let w = img.width, h = img.height;
+      if (w > MAX || h > MAX) {
+        if (w > h) { h = Math.round(h * MAX / w); w = MAX; }
+        else { w = Math.round(w * MAX / h); h = MAX; }
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      const compressed = canvas.toDataURL('image/jpeg', 0.6);
+      URL.revokeObjectURL(url);
+      stepPhotos[stepIdx].push({ data: compressed, name: file.name });
+      loaded++;
+      if (loaded === files.length) renderStepContent();
+    };
+    img.src = url;
+  });
+}
+
+function removePhoto(stepIdx, photoIdx, e) {
+  e.stopPropagation();
+  stepPhotos[stepIdx].splice(photoIdx, 1);
+  renderStepContent();
+}
+
+function nextStep() {
+  if (!stepChecks[currentStepIndex].every(Boolean)) {
+    showToast('Zaškrtni všetky položky', 'error');
+    return;
+  }
+  // Save notes from textarea
+  const ta = document.getElementById(`stepNote_${currentStepIndex}`);
+  if (ta) stepNotes[currentStepIndex] = ta.value;
+
+  stepDone[currentStepIndex] = true;
+  currentStepIndex++;
+  renderInstallStep();
+  window.scrollTo(0, 0);
+}
+
+// ================================================================
+// FINISH & PDF REPORT
+// ================================================================
+async function finishInstall() {
+  const step = STEPS[currentStepIndex];
+  if (!stepChecks[currentStepIndex].every(Boolean)) {
+    showToast('Zaškrtni všetky položky', 'error');
+    return;
+  }
+  stepDone[currentStepIndex] = true;
+  updateProgress();
+
+  const endTime = new Date();
+  document.getElementById('doneTime').textContent = fmtDateTime(endTime);
+
+  // Show sending overlay
+  setSending(true, 'Generujem PDF report...');
+
+  try {
+    const pdfBase64 = await generatePDF(endTime);
+    setSending(true, 'Odosielam email...');
+    await sendEmail(pdfBase64, endTime);
+    // Save report
+    saveReport(endTime);
+    await syncToCloud();
+    setSending(false);
+    showToast('Report odoslaný! ✓', 'success');
+    showScreen('screenDone');
+    renderStoreList();
+  } catch(e) {
+    setSending(false);
+    console.error(e);
+    showToast('Chyba pri odosielaní: ' + e.message, 'error');
+  }
+}
+
+async function generatePDF(endTime) {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
+
+  const W = 210;
+  const margin = 16;
+  let y = 20;
+
+  const addText = (text, x, yy, opts={}) => {
+    doc.text(String(text), x, yy, opts);
+  };
+
+  // Header
+  doc.setFillColor(26, 26, 46);
+  doc.rect(0, 0, W, 28, 'F');
+  doc.setTextColor(232, 80, 10);
+  doc.setFontSize(14);
+  doc.setFont('helvetica', 'bold');
+  addText('INŠTALAČNÝ REPORT', margin, 13);
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'normal');
+  addText('INSTTRACK — automaticky vygenerovaný dokument', margin, 21);
+  addText(fmtDateTime(endTime), W - margin, 21, { align: 'right' });
+
+  y = 38;
+
+  // Project info box
+  doc.setFillColor(247, 247, 245);
+  doc.roundedRect(margin, y, W - 2*margin, 28, 3, 3, 'F');
+  doc.setTextColor(26, 26, 46);
+  doc.setFontSize(11);
+  doc.setFont('helvetica', 'bold');
+  addText('Projekt:', margin+4, y+8);
+  addText('Predajňa:', margin+4, y+16);
+  addText('Adresa:', margin+4, y+24);
+  doc.setFont('helvetica', 'normal');
+  addText(currentProject?.name || '–', margin+28, y+8);
+  addText(currentStore?.name || '–', margin+28, y+16);
+  addText(currentStore?.address || '–', margin+28, y+24);
+
+  y += 34;
+
+  // Arrival / Finish
+  doc.setFillColor(232, 80, 10);
+  doc.rect(margin, y, W - 2*margin, 6, 'F');
+  doc.setTextColor(255,255,255);
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'bold');
+  addText('ČASOVÝ ZÁZNAM', margin+2, y+4.2);
+  y += 9;
+  doc.setTextColor(26, 26, 46);
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'normal');
+  addText(`Príchod: ${fmtDateTime(arrivalTime)}   |   GPS: ${arrivalCoords ? arrivalCoords.lat+', '+arrivalCoords.lng : 'nedostupné'}   |   Ukončenie: ${fmtDateTime(endTime)}`, margin, y);
+  const dur = Math.round((endTime - arrivalTime)/60000);
+  addText(`Trvanie: ${dur} minút`, margin, y+6);
+  y += 14;
+
+  // Steps
+  for (let i = 0; i < STEPS.length; i++) {
+    const step = STEPS[i];
+    if (y > 260) { doc.addPage(); y = 20; }
+
+    // Step header
+    doc.setFillColor(61, 61, 92);
+    doc.roundedRect(margin, y, W - 2*margin, 8, 2, 2, 'F');
+    doc.setTextColor(255,255,255);
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'bold');
+    addText(`${i+1}. ${step.title}`, margin+3, y+5.5);
+    doc.setTextColor(200, 230, 200);
+    addText(stepDone[i] ? '✓ SPLNENÉ' : '○ NESPLNENÉ', W-margin-2, y+5.5, { align:'right' });
+    y += 11;
+
+    // Checks
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8.5);
+    step.checks.forEach((c, ci) => {
+      if (y > 270) { doc.addPage(); y = 20; }
+      doc.setTextColor(stepChecks[i][ci] ? 26 : 150, stepChecks[i][ci] ? 138 : 150, stepChecks[i][ci] ? 74 : 150);
+      addText(`${stepChecks[i][ci] ? '☑' : '☐'} ${c}`, margin+3, y);
+      y += 5.5;
+    });
+
+    // Notes
+    if (stepNotes[i]) {
+      if (y > 265) { doc.addPage(); y = 20; }
+      doc.setTextColor(80, 80, 80);
+      doc.setFont('helvetica', 'italic');
+      const lines = doc.splitTextToSize(`Poznámka: ${stepNotes[i]}`, W - 2*margin - 6);
+      lines.forEach(l => { addText(l, margin+3, y); y += 5; });
+      doc.setFont('helvetica', 'normal');
+    }
+
+    y += 4;
+  }
+
+  // Photos — embed inline
+  const allPhotos = [];
+  STEPS.forEach((s, i) => {
+    stepPhotos[i].forEach(p => allPhotos.push({ stepName: s.title, ...p }));
+  });
+
+  if (allPhotos.length > 0) {
+    doc.addPage();
+    y = 20;
+    doc.setFillColor(26, 26, 46);
+    doc.rect(0, 0, W, 14, 'F');
+    doc.setTextColor(232, 80, 10);
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    addText('FOTODOKUMENTÁCIA', margin, 10);
+    y = 24;
+
+    let col = 0;
+    const imgW = 82;
+    const imgH = 62;
+    const gap = 8;
+
+    for (const photo of allPhotos) {
+      if (y + imgH > 280) { doc.addPage(); y = 20; col = 0; }
+      const x = margin + col * (imgW + gap);
+      try {
+        doc.addImage(photo.data, 'JPEG', x, y, imgW, imgH);
+        doc.setFillColor(0,0,0,0.3);
+        doc.setTextColor(26,26,46);
+        doc.setFontSize(7);
+        doc.setFont('helvetica', 'normal');
+        addText(photo.stepName, x, y + imgH + 4);
+      } catch(e) { console.warn('Photo embed error', e); }
+      col++;
+      if (col >= 2) { col = 0; y += imgH + 10; }
+    }
+  }
+
+  // Footer on last page
+  const totalPages = doc.internal.getNumberOfPages();
+  for (let p = 1; p <= totalPages; p++) {
+    doc.setPage(p);
+    doc.setFontSize(7);
+    doc.setTextColor(150,150,150);
+    doc.setFont('helvetica', 'normal');
+    addText(`Strana ${p} / ${totalPages}   |   ${currentProject?.name}   |   ${currentStore?.name}`, W/2, 295, { align: 'center' });
+  }
+
+  return doc.output('datauristring').split(',')[1]; // base64
+}
+
+async function sendEmail(pdfBase64, endTime) {
+  const { webhookUrl } = appData.settings;
+  if (!webhookUrl) {
+    throw new Error('Webhook URL nie je nastavené v Admin → Nastavenia → Power Automate');
+  }
+
+  const dur = Math.round((endTime - arrivalTime)/60000);
+  const allPhotoCount = stepPhotos.reduce((a,b) => a + b.length, 0);
+
+  const payload = {
+    to_email: currentProject.email,
+    project_name: currentProject.name,
+    store_name: currentStore.name,
+    store_address: currentStore.address,
+    arrival_time: fmtDateTime(arrivalTime),
+    finish_time: fmtDateTime(endTime),
+    duration: `${dur} minút`,
+    photo_count: allPhotoCount,
+    gps: arrivalCoords ? `${arrivalCoords.lat}, ${arrivalCoords.lng}` : 'nedostupné',
+    pdf_base64: pdfBase64,
+    pdf_filename: `Report_${currentStore.name.replace(/[^a-zA-Z0-9]/g,'_')}_${new Date().toISOString().slice(0,10)}.pdf`
+  };
+
+  // Pošli priamo na Make.com
+  await fetch(webhookUrl, {
+    method: 'POST',
+    mode: 'no-cors',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  await new Promise(r => setTimeout(r, 3000));
+}
+
+async function testWebhook() {
+  const url = document.getElementById('settingsWebhookUrl').value.trim();
+  if (!url) { showToast('Najskôr vlož Webhook URL', 'error'); return; }
+  setSending(true, 'Testujem spojenie...');
+  try {
+    const testRes = await fetch('/api/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ webhookUrl: url, payload: { test: true, message: 'INSTTRACK test spojenia', timestamp: new Date().toISOString() } })
+    });
+    if (!testRes.ok) throw new Error('Proxy nedostupná');
+    setSending(false);
+    showToast('Webhook dosiahnuteľný ✓', 'success');
+  } catch(e) {
+    setSending(false);
+    showToast('Spojenie zlyhalo: ' + e.message, 'error');
+  }
+}
+
+function saveReport(endTime) {
+  const report = {
+    id: uid(),
+    projectId: currentProject.id,
+    storeId: currentStore.id,
+    storeName: currentStore.name,
+    projectName: currentProject.name,
+    arrivalTime: arrivalTime?.toISOString(),
+    endTime: endTime.toISOString(),
+    gps: arrivalCoords,
+    completed: true,
+    photoCount: stepPhotos.reduce((a,b) => a+b.length, 0)
+  };
+  appData.reports.push(report);
+  saveLocal();
+}
+
+// ================================================================
+// ADMIN
+// ================================================================
+function showAdminLogin() {
+  document.getElementById('adminPwdInput').value = '';
+  showScreen('screenAdminLogin');
+}
+
+function doAdminLogin() {
+  const pwd = document.getElementById('adminPwdInput').value;
+  if (pwd === appData.settings.adminPwd) {
+    renderAdminPanel();
+    showScreen('screenAdmin');
+  } else {
+    showToast('Nesprávne heslo', 'error');
+  }
+}
+
+function adminLogout() {
+  showScreen('screenProjects');
+}
+
+function switchAdminTab(tabId, btn) {
+  document.querySelectorAll('.admin-section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById(tabId).classList.add('active');
+  btn.classList.add('active');
+  if (tabId === 'tabReports') renderReports();
+}
+
+function renderAdminPanel() {
+  renderAdminProjects();
+  renderReports();
+  loadSettingsForm();
+}
+
+function renderAdminProjects() {
+  const wrap = document.getElementById('adminProjectList');
+  if (!appData.projects.length) {
+    wrap.innerHTML = '<div class="card" style="text-align:center;color:var(--muted);">Žiadne projekty.</div>';
+    return;
+  }
+  wrap.innerHTML = appData.projects.map(p => `
+    <div class="card" style="margin-bottom:12px;">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;">
+        <div>
+          <div style="font-weight:800;font-size:15px;">${esc(p.name)}</div>
+          <div style="font-size:12px;color:var(--muted);">${esc(p.from)} – ${esc(p.to)}</div>
+          <div style="margin-top:4px;"><span class="tag ${p.status==='active'?'tag-ok':'tag-warn'}">${p.status==='active'?'Aktívny':'Neaktívny'}</span></div>
+        </div>
+        <div style="display:flex;gap:6px;flex-shrink:0;">
+          <button class="btn-outline btn btn-sm" style="width:auto;" onclick="editProject('${p.id}')">Upraviť</button>
+          <button class="btn-icon" onclick="deleteProject('${p.id}')">✕</button>
+        </div>
+      </div>
+      <div class="divider"></div>
+      <div style="font-size:12px;color:var(--muted);">
+        📬 ${esc(p.email)} &nbsp;|&nbsp; 🏪 ${p.stores?.length || 0} predajní
+      </div>
+    </div>
+  `).join('');
+}
+
+function renderReports() {
+  const filter = document.getElementById('reportFilterProject')?.value || '';
+  const sel = document.getElementById('reportFilterProject');
+  if (sel) {
+    const projs = appData.projects.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('');
+    sel.innerHTML = '<option value="">Všetky projekty</option>' + projs;
+    if (filter) sel.value = filter;
+  }
+
+  const reports = filter ? appData.reports.filter(r => r.projectId === filter) : appData.reports;
+  const wrap = document.getElementById('reportList');
+  if (!reports.length) {
+    wrap.innerHTML = '<div style="text-align:center;padding:24px;color:var(--muted);">Žiadne reporty.</div>';
+    return;
+  }
+  wrap.innerHTML = reports.slice().reverse().map(r => `
+    <div class="report-item">
+      <div class="report-header">
+        <div>
+          <div class="report-store">${esc(r.storeName)}</div>
+          <div class="report-meta">${esc(r.projectName)}</div>
+        </div>
+        <div class="report-time">${r.endTime ? fmtDateTime(new Date(r.endTime)) : '–'}</div>
+      </div>
+      <div style="font-size:12px;color:var(--muted);">
+        📸 ${r.photoCount} foto &nbsp;|&nbsp;
+        ⏱ ${r.arrivalTime && r.endTime ? Math.round((new Date(r.endTime)-new Date(r.arrivalTime))/60000) : '?'} min &nbsp;|&nbsp;
+        📍 ${r.gps ? r.gps.lat+', '+r.gps.lng : 'GPS nedostupné'}
+      </div>
+    </div>
+  `).join('');
+}
+
+// ================================================================
+// PROJECT CRUD
+// ================================================================
+function openNewProjectModal() {
+  document.getElementById('editProjectId').value = '';
+  document.getElementById('modalProjectTitle').textContent = 'Nový projekt';
+  document.getElementById('projName').value = '';
+  document.getElementById('projFrom').value = '';
+  document.getElementById('projTo').value = '';
+  document.getElementById('projEmail').value = '';
+  document.getElementById('projStores').value = '';
+  document.getElementById('projStatus').value = 'active';
+  openModal('modalProject');
+}
+
+function editProject(id) {
+  const p = appData.projects.find(p => p.id === id);
+  if (!p) return;
+  document.getElementById('editProjectId').value = id;
+  document.getElementById('modalProjectTitle').textContent = 'Upraviť projekt';
+  document.getElementById('projName').value = p.name;
+  document.getElementById('projFrom').value = p.from;
+  document.getElementById('projTo').value = p.to;
+  document.getElementById('projEmail').value = p.email;
+  document.getElementById('projStatus').value = p.status;
+  document.getElementById('projStores').value = (p.stores||[]).map(s => `${s.name} | ${s.address}`).join('\n');
+  openModal('modalProject');
+}
+
+function saveProject() {
+  const id = document.getElementById('editProjectId').value;
+  const name = document.getElementById('projName').value.trim();
+  const from = document.getElementById('projFrom').value.trim();
+  const to = document.getElementById('projTo').value.trim();
+  const email = document.getElementById('projEmail').value.trim();
+  const storesRaw = document.getElementById('projStores').value.trim();
+  const status = document.getElementById('projStatus').value;
+
+  if (!name || !email) { showToast('Vyplň názov a email', 'error'); return; }
+
+  const stores = storesRaw.split('\n').filter(Boolean).map(line => {
+    const [sName, sAddr] = line.split('|').map(s => s.trim());
+    return { id: uid(), name: sName || line, address: sAddr || '' };
+  });
+
+  if (id) {
+    const idx = appData.projects.findIndex(p => p.id === id);
+    if (idx >= 0) {
+      // Keep existing store IDs where names match
+      const existing = appData.projects[idx].stores || [];
+      stores.forEach(s => {
+        const match = existing.find(e => e.name === s.name);
+        if (match) s.id = match.id;
+      });
+      appData.projects[idx] = { ...appData.projects[idx], name, from, to, email, status, stores };
+    }
+  } else {
+    appData.projects.push({ id: uid(), name, from, to, email, status, stores, createdAt: new Date().toISOString() });
+  }
+
+  saveLocal();
+  syncToCloud();
+  closeModal('modalProject');
+  renderAdminProjects();
+  renderProjectList();
+  showToast('Projekt uložený ✓', 'success');
+}
+
+function deleteProject(id) {
+  if (!confirm('Naozaj vymazať projekt?')) return;
+  appData.projects = appData.projects.filter(p => p.id !== id);
+  saveLocal();
+  syncToCloud();
+  renderAdminProjects();
+  renderProjectList();
+  showToast('Projekt vymazaný');
+}
+
+// ================================================================
+// SETTINGS
+// ================================================================
+function loadSettingsForm() {
+  const s = appData.settings;
+  document.getElementById('settingsBinKey').value = s.binKey || '';
+  document.getElementById('settingsBinId').value = s.binId || '';
+  document.getElementById('settingsWebhookUrl').value = s.webhookUrl || '';
+}
+
+function saveSettings() {
+  appData.settings.binKey = document.getElementById('settingsBinKey').value.trim();
+  appData.settings.binId = document.getElementById('settingsBinId').value.trim();
+  appData.settings.webhookUrl = document.getElementById('settingsWebhookUrl').value.trim();
+  saveLocal();
+  showToast('Nastavenia uložené ✓', 'success');
+}
+
+function changeAdminPwd() {
+  const newPwd = document.getElementById('settingsNewPwd').value.trim();
+  if (!newPwd || newPwd.length < 4) { showToast('Heslo musí mať aspoň 4 znaky', 'error'); return; }
+  appData.settings.adminPwd = newPwd;
+  saveLocal();
+  document.getElementById('settingsNewPwd').value = '';
+  showToast('Heslo zmenené ✓', 'success');
+}
+
+// ================================================================
+// LEAVE CONFIRM
+// ================================================================
+function confirmLeave() { openModal('modalLeave'); }
+function leaveInstall() { closeModal('modalLeave'); showScreen('screenStores'); }
+
+// ================================================================
+// MODALS
+// ================================================================
+function openModal(id) { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+// ================================================================
+// UTILS
+// ================================================================
+function uid() { return Math.random().toString(36).slice(2,10) + Date.now().toString(36); }
+function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function fmtTime(d) { return d ? d.toLocaleTimeString('sk-SK', {hour:'2-digit',minute:'2-digit'}) : '–'; }
+function fmtDateTime(d) { return d ? d.toLocaleString('sk-SK', {day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '–'; }
+
+function setSending(on, msg='') {
+  const el = document.getElementById('sendingOverlay');
+  document.getElementById('sendingMsg').textContent = msg;
+  el.classList.toggle('open', on);
+}
+
+let toastTimer;
+function showToast(msg, type='') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show' + (type ? ' '+type : '');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+// Close modals on overlay click
+document.querySelectorAll('.modal-overlay').forEach(el => {
+  el.addEventListener('click', e => { if (e.target === el) el.classList.remove('open'); });
+});
+
+// ================================================================
+// INIT
+// ================================================================
+async function init() {
+  loadLocal();
+  renderProjectList();
+
+  // Try cloud sync
+  if (appData.settings.binKey && appData.settings.binId) {
+    await loadFromCloud();
+    renderProjectList();
+  }
+}
+
+init();
+</script>
+</body>
+</html>
