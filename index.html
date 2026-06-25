@@ -1076,10 +1076,21 @@ async function loadFromCloud() {
 // ================================================================
 // SCREENS
 // ================================================================
+let refreshTimer = null;
+
 function showScreen(id) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById(id).classList.add('active');
   window.scrollTo(0, 0);
+
+  // Auto-refresh keď sú technici na výbere predajní
+  clearInterval(refreshTimer);
+  if (id === 'screenStores') {
+    refreshTimer = setInterval(async () => {
+      await loadFromCloud();
+      renderStoreList();
+    }, 30000); // každých 30 sekúnd
+  }
 }
 
 // ================================================================
@@ -1537,7 +1548,7 @@ async function testWebhook() {
   if (!url) { showToast('Najskôr vlož Webhook URL', 'error'); return; }
   setSending(true, 'Testujem spojenie...');
   try {
-    const testRes = await fetch('/api/send', {
+    const testRes = await fetch('/.netlify/functions/send', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ webhookUrl: url, payload: { test: true, message: 'INSTTRACK test spojenia', timestamp: new Date().toISOString() } })
