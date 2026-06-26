@@ -1365,7 +1365,25 @@ async function generateRolloutPDF(endTime) {
   const W = 210, M = 14;
   let y = 0;
 
-  const t = (s) => String(s||'').replace(/[čĎĺľňŕšťž]/gi, c => ({'č':'c','Ď':'D','ĺ':'l','ľ':'L','ň':'n','ŕ':'r','š':'s','ť':'t','ž':'z','Č':'C','Š':'S','Ž':'Z','Ň':'N','Ŕ':'R','Ť':'T'}[c]||c)).replace(/[áéíóúýäöü]/g, c => ({'á':'a','é':'e','í':'i','ó':'o','ú':'u','ý':'y','ä':'a','ö':'o','ü':'u'}[c]||c)).replace(/[ÁÉÍÓÚÝÄÖÜ]/g, c => ({'Á':'A','É':'E','Í':'I','Ó':'O','Ú':'U','Ý':'Y','Ä':'A','Ö':'O','Ü':'U'}[c]||c));
+  const t = (s) => String(s||'')
+    .replace(/č/g,'c').replace(/Č/g,'C')
+    .replace(/ď/g,'d').replace(/Ď/g,'D')
+    .replace(/ĺ/g,'l').replace(/Ĺ/g,'L')
+    .replace(/ľ/g,'l').replace(/Ľ/g,'L')
+    .replace(/ň/g,'n').replace(/Ň/g,'N')
+    .replace(/ŕ/g,'r').replace(/Ŕ/g,'R')
+    .replace(/š/g,'s').replace(/Š/g,'S')
+    .replace(/ť/g,'t').replace(/Ť/g,'T')
+    .replace(/ž/g,'z').replace(/Ž/g,'Z')
+    .replace(/á/g,'a').replace(/Á/g,'A')
+    .replace(/é/g,'e').replace(/É/g,'E')
+    .replace(/í/g,'i').replace(/Í/g,'I')
+    .replace(/ó/g,'o').replace(/Ó/g,'O')
+    .replace(/ú/g,'u').replace(/Ú/g,'U')
+    .replace(/ý/g,'y').replace(/Ý/g,'Y')
+    .replace(/ä/g,'a').replace(/Ä/g,'A')
+    .replace(/ö/g,'o').replace(/Ö/g,'O')
+    .replace(/ü/g,'u').replace(/Ü/g,'U');
 
   // Header
   doc.setFillColor(20,20,20); doc.rect(0,0,W,22,'F');
