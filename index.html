@@ -707,6 +707,7 @@ textarea{resize:vertical;min-height:80px}
 const HARDCODED = {
   binKey: '$2a$10$n/q.ffTg.17g.TaNGyMLPOTE23AgQUWjqlkISzaq1xaJVpVQUVH0S',
   binId: '6a3cd316f5f4af5e292d4d04',
+  rolloutBinId: '6a3e1df3f5f4af5e2932c220',
   webhookUrl: 'https://hook.eu1.make.com/ap3cgawflnfloh9tvcaxg8xonxbic4bv',
   webhookNovy: 'https://hook.eu1.make.com/smu5fmufxtv23gcdp7pul6yserrvilux',
   webhookRollout: 'https://hook.eu1.make.com/htvwv4hev1pou75cwurutbji4mv5rcit'
@@ -802,9 +803,36 @@ async function syncCloud() {
   const res = await fetch(`https://api.jsonbin.io/v3/b/${binId}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', 'X-Master-Key': binKey },
-    body: JSON.stringify({ technicians: appData.technicians, reports: appData.reports, rolloutProjects: appData.rolloutProjects, settings: { emailNovy: appData.settings.emailNovy, adminPwd: appData.settings.adminPwd } })
+    body: JSON.stringify({ technicians: appData.technicians, reports: appData.reports, settings: { emailNovy: appData.settings.emailNovy, adminPwd: appData.settings.adminPwd } })
   });
   if (!res.ok) throw new Error('JSONBin sync failed: ' + res.status);
+}
+
+async function syncRolloutCloud() {
+  const binKey = HARDCODED.binKey;
+  const binId = HARDCODED.rolloutBinId;
+  const res = await fetch(`https://api.jsonbin.io/v3/b/${binId}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', 'X-Master-Key': binKey },
+    body: JSON.stringify({ rolloutProjects: appData.rolloutProjects })
+  });
+  if (!res.ok) throw new Error('Rollout sync failed: ' + res.status);
+}
+
+async function loadRolloutCloud() {
+  const binKey = HARDCODED.binKey;
+  const binId = HARDCODED.rolloutBinId;
+  try {
+    const r = await fetch(`https://api.jsonbin.io/v3/b/${binId}/latest`, {
+      headers: { 'X-Master-Key': binKey }
+    });
+    if (r.ok) {
+      const j = await r.json();
+      if (j.record?.rolloutProjects) {
+        appData.rolloutProjects = j.record.rolloutProjects;
+      }
+    }
+  } catch(e) { console.warn('Rollout cloud load failed', e); }
 }
 
 async function loadCloud() {
@@ -819,7 +847,6 @@ async function loadCloud() {
       if (j.record) {
         if (j.record.technicians) appData.technicians = j.record.technicians;
         if (j.record.reports) appData.reports = j.record.reports;
-        if (j.record.rolloutProjects) appData.rolloutProjects = j.record.rolloutProjects;
         if (j.record.settings) {
           appData.settings.emailNovy = j.record.settings.emailNovy || appData.settings.emailNovy;
           appData.settings.adminPwd = j.record.settings.adminPwd || appData.settings.adminPwd;
@@ -1598,7 +1625,7 @@ async function saveRolloutProject() {
   saveLocal();
   setSending(true, 'Ukladám projekt...');
   try {
-    await syncCloud();
+    await syncRolloutCloud();
     setSending(false);
     closeModal('mNewRollout');
     renderRolloutAdminList();
@@ -1669,7 +1696,7 @@ function showResetStoreModal(projId) {
 function resetSingleStore(storeId) {
   if (!confirm('Resetovať túto predajňu?')) return;
   appData.reports = appData.reports.filter(r => !(r.rolloutProjectId === currentRolloutProject.id && r.storeId === storeId));
-  saveLocal(); syncCloud();
+  saveLocal(); syncRolloutCloud();
   showToast('Predajňa resetovaná ✓', 'ok');
   renderRolloutStoreList();
 }
@@ -1677,7 +1704,7 @@ function resetSingleStore(storeId) {
 function resetStore(projId, storeId) {
   if (!confirm('Resetovať túto predajňu? Report zostane v histórii, ale predajňa sa označí ako nehotová.')) return;
   appData.reports = appData.reports.filter(r => !(r.rolloutProjectId === projId && r.storeId === storeId));
-  saveLocal(); syncCloud();
+  saveLocal(); syncRolloutCloud();
   showToast('Predajňa resetovaná ✓', 'ok');
   showResetStoreModal(projId);
 }
@@ -1685,7 +1712,7 @@ function resetStore(projId, storeId) {
 function deleteRolloutProject(id) {
   if (!confirm('Vymazať Rollout projekt?')) return;
   appData.rolloutProjects = appData.rolloutProjects.filter(p => p.id !== id);
-  saveLocal(); syncCloud(); renderRolloutAdminList(); renderDashboard();
+  saveLocal(); syncRolloutCloud(); renderRolloutAdminList(); renderDashboard();
   showToast('Projekt vymazaný');
 }
 
@@ -2233,6 +2260,7 @@ async function init() {
   loadLocal();
   buildPinGrid();
   await loadCloud();
+  await loadRolloutCloud();
 }
 
 init();
