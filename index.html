@@ -811,10 +811,22 @@ async function syncCloud() {
 async function syncRolloutCloud() {
   const binKey = HARDCODED.binKey;
   const binId = HARDCODED.rolloutBinId;
+  // Strip component images before saving to cloud (too large)
+  // compImages are at project level (not per store) so they're small enough
+  const projectsNoImages = appData.rolloutProjects.map(p => ({
+    ...p,
+    stores: p.stores?.map(s => ({
+      ...s,
+      components: s.components?.map(c => ({ label: c.label, count: c.count }))
+    }))
+    // compImages stay at project level - included as-is
+  }));
+  const payload = JSON.stringify({ rolloutProjects: projectsNoImages });
+  console.log('Rollout payload size:', payload.length, 'bytes');
   const res = await fetch(`https://api.jsonbin.io/v3/b/${binId}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', 'X-Master-Key': binKey },
-    body: JSON.stringify({ rolloutProjects: appData.rolloutProjects })
+    body: payload
   });
   if (!res.ok) throw new Error('Rollout sync failed: ' + res.status);
 }
@@ -1212,7 +1224,7 @@ function renderRolloutStepContent() {
                   <div style="font-size:12px;color:${active?'var(--accent)':'var(--muted)'}">
                     ${active ? `<b>${c.count} ks</b>` : '0 ks — neinštaluje sa'}
                   </div>
-                  ${c.image && active ? `<img src="${c.image}" style="width:100%;max-width:200px;border-radius:6px;margin-top:8px;border:1px solid var(--border)">` : ''}
+                  ${active && currentRolloutProject.compImages?.[ci]?.image ? `<img src="${currentRolloutProject.compImages[ci].image}" style="width:100%;max-width:200px;border-radius:6px;margin-top:8px;border:1px solid var(--border)">` : ''}
                 </div>
               </li>
             `;
@@ -1532,11 +1544,19 @@ function getXLSStores() {
     id: uid(),
     code: String(r[3] || ''),
     name: String(r[4] || ''),
+    // Only store count per store - images are at project level
     components: compCols.map((ci,i) => ({
       label: xlsCompLabels[i],
-      count: r[ci] || 0,
-      image: xlsCompImages[i] || null
+      count: r[ci] || 0
     }))
+  }));
+}
+
+function getXLSCompImages() {
+  // Returns component images at project level (one set for all stores)
+  return xlsCompLabels.map((label, i) => ({
+    label,
+    image: xlsCompImages[i] || null
   }));
 }
 
@@ -1614,12 +1634,13 @@ async function saveRolloutProject() {
   const minFotoPred = parseInt(document.getElementById('rMinFotoPred').value) || 1;
   const minFotoPo = parseInt(document.getElementById('rMinFotoPo').value) || 1;
 
+  const compImages = getXLSCompImages();
   const id = document.getElementById('editRolloutId').value;
   if (id) {
     const idx = appData.rolloutProjects.findIndex(p => p.id === id);
-    if (idx >= 0) appData.rolloutProjects[idx] = { ...appData.rolloutProjects[idx], name, from, to, email, stores, allowedTechs, minFotoPred, minFotoPo };
+    if (idx >= 0) appData.rolloutProjects[idx] = { ...appData.rolloutProjects[idx], name, from, to, email, stores, allowedTechs, minFotoPred, minFotoPo, compImages };
   } else {
-    appData.rolloutProjects.push({ id: uid(), name, from, to, email, stores, allowedTechs, minFotoPred, minFotoPo, status: 'active', createdAt: new Date().toISOString() });
+    appData.rolloutProjects.push({ id: uid(), name, from, to, email, stores, allowedTechs, minFotoPred, minFotoPo, compImages, status: 'active', createdAt: new Date().toISOString() });
   }
 
   saveLocal();
