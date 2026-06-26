@@ -708,7 +708,8 @@ const HARDCODED = {
   binKey: '$2a$10$n/q.ffTg.17g.TaNGyMLPOTE23AgQUWjqlkISzaq1xaJVpVQUVH0S',
   binId: '6a3cd316f5f4af5e292d4d04',
   webhookUrl: 'https://hook.eu1.make.com/ap3cgawflnfloh9tvcaxg8xonxbic4bv',
-  webhookNovy: 'https://hook.eu1.make.com/smu5fmufxtv23gcdp7pul6yserrvilux'
+  webhookNovy: 'https://hook.eu1.make.com/smu5fmufxtv23gcdp7pul6yserrvilux',
+  webhookRollout: 'https://hook.eu1.make.com/htvwv4hev1pou75cwurutbji4mv5rcit'
 };
 
 // ================================================================
@@ -1308,7 +1309,7 @@ async function finishRollout() {
 }
 
 async function sendWebhookRollout(payload) {
-  const url = HARDCODED.webhookUrl;
+  const url = HARDCODED.webhookRollout;
   const res = await fetch('/.netlify/functions/send', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
