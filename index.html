@@ -799,13 +799,12 @@ function loadLocal() {
 async function syncCloud() {
   const { binKey, binId } = appData.settings;
   if (!binKey || !binId) return;
-  try {
-    await fetch(`https://api.jsonbin.io/v3/b/${binId}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json', 'X-Master-Key': binKey },
-      body: JSON.stringify({ technicians: appData.technicians, reports: appData.reports, rolloutProjects: appData.rolloutProjects, settings: { emailNovy: appData.settings.emailNovy, adminPwd: appData.settings.adminPwd } })
-    });
-  } catch(e) {}
+  const res = await fetch(`https://api.jsonbin.io/v3/b/${binId}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', 'X-Master-Key': binKey },
+    body: JSON.stringify({ technicians: appData.technicians, reports: appData.reports, rolloutProjects: appData.rolloutProjects, settings: { emailNovy: appData.settings.emailNovy, adminPwd: appData.settings.adminPwd } })
+  });
+  if (!res.ok) throw new Error('JSONBin sync failed: ' + res.status);
 }
 
 async function loadCloud() {
@@ -1564,7 +1563,7 @@ function renderRolloutAdminList() {
   `}).join('');
 }
 
-function saveRolloutProject() {
+async function saveRolloutProject() {
   const name = document.getElementById('rProjName').value.trim();
   const from = document.getElementById('rProjFrom').value;
   const to = document.getElementById('rProjTo').value;
@@ -1596,11 +1595,19 @@ function saveRolloutProject() {
     appData.rolloutProjects.push({ id: uid(), name, from, to, email, stores, allowedTechs, minFotoPred, minFotoPo, status: 'active', createdAt: new Date().toISOString() });
   }
 
-  saveLocal(); syncCloud();
-  closeModal('mNewRollout');
-  renderRolloutAdminList();
-  renderDashboard();
-  showToast('Rollout projekt uložený ✓', 'ok');
+  saveLocal();
+  setSending(true, 'Ukladám projekt...');
+  try {
+    await syncCloud();
+    setSending(false);
+    closeModal('mNewRollout');
+    renderRolloutAdminList();
+    renderDashboard();
+    showToast('Rollout projekt uložený ✓', 'ok');
+  } catch(e) {
+    setSending(false);
+    showToast('Chyba pri ukladaní: ' + e.message, 'err');
+  }
 
   // Reset form
   xlsRawData = [];
