@@ -1347,7 +1347,7 @@ async function finishRollout() {
 }
 
 async function sendWebhookRollout(payload) {
-  const url = HARDCODED.webhookRollout;
+  const url = HARDCODED.webhookNovy;
   const res = await fetch('/.netlify/functions/send', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
