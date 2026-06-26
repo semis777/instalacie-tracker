@@ -351,7 +351,7 @@ textarea{resize:vertical;min-height:80px}
           <span class="badge" id="predBadge">0 foto</span>
         </div>
         <label class="upload-area" id="predUploadArea">
-          <input type="file" accept="image/*" multiple capture="environment" onchange="addPhotosNovy('pred', this)">
+          <input type="file" accept="image/*" multiple onchange="addPhotosNovy('pred', this)">
           <div class="ua-icon">📸</div>
           <div class="ua-text"><strong>Pridať fotografie</strong><br>Klikni alebo odfot</div>
         </label>
@@ -367,7 +367,7 @@ textarea{resize:vertical;min-height:80px}
           <span class="badge" id="poBadge">0 foto</span>
         </div>
         <label class="upload-area" id="poUploadArea">
-          <input type="file" accept="image/*" multiple capture="environment" onchange="addPhotosNovy('po', this)">
+          <input type="file" accept="image/*" multiple onchange="addPhotosNovy('po', this)">
           <div class="ua-icon">📸</div>
           <div class="ua-text"><strong>Pridať fotografie</strong><br>Klikni alebo odfot</div>
         </label>
@@ -1190,7 +1190,7 @@ function renderRolloutStepContent() {
           ${photos.length} / ${required} fotografií (min. ${required})
         </div>
         <label class="upload-area">
-          <input type="file" accept="image/*" multiple capture="environment" onchange="addRolloutPhotos('${step.key}', this)">
+          <input type="file" accept="image/*" multiple onchange="addRolloutPhotos('${step.key}', this)">
           <div class="ua-icon">📷</div>
           <div class="ua-text"><strong>Pridať fotografie</strong><br>Klikni alebo odfot</div>
         </label>
