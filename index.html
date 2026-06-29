@@ -990,9 +990,12 @@ function pinSubmit() {
   setTimeout(() => { d.textContent = '––––'; d.classList.remove('error'); }, 1500);
 }
 
-function afterLogin() {
+async function afterLogin() {
   document.getElementById('hdrUser').textContent = currentUser.name;
   document.getElementById('hdrLogoutBtn').style.display = 'block';
+  // Always reload fresh data from cloud on login
+  await loadCloud();
+  await loadRolloutCloud();
   if (currentUser.isAdmin) {
     document.getElementById('hdrAdminBtn').style.display = 'block';
     renderAdminPanel();
