@@ -25,7 +25,7 @@
   --sh2: 0 8px 32px rgba(0,0,0,0.12);
 }
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--ink);min-height:100vh;font-size:16px;line-height:1.5}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--ink);min-height:100vh;font-size:16px;line-height:1.5;overflow-y:auto}
 
 /* HEADER */
 .hdr{background:var(--ink);color:#fff;padding:13px 18px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(0,0,0,0.3)}
@@ -490,7 +490,7 @@ textarea{resize:vertical;min-height:80px}
 <!-- ======================================================= -->
 <!-- SCREEN: RESET STORES -->
 <!-- ======================================================= -->
-<div class="screen" id="sResetStores">
+<div class="screen" id="sResetStores" style="overflow-y:auto;height:calc(100vh - 48px)">
   <div class="wrap">
     <div class="step-header">
       <button onclick="showScreen('sAdmin')">←</button>
