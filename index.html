@@ -1764,7 +1764,9 @@ function showResetStoreModal(projId) {
         <button onclick="renderRolloutAdminList()" style="background:none;border:none;font-size:20px;cursor:pointer">←</button>
         <div style="font-weight:800;font-size:16px">Reset predajní — ${esc(p.name)}</div>
       </div>
-      ${list}
+      <div style="max-height:60vh;overflow-y:auto;-webkit-overflow-scrolling:touch">
+        ${list}
+      </div>
     </div>
   `;
 }
