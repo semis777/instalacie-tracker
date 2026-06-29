@@ -2245,7 +2245,7 @@ function openAddTech() {
   openModal('mAddTech');
 }
 
-function saveTech() {
+async function saveTech() {
   const name = document.getElementById('techName').value.trim();
   const pin = document.getElementById('techPin').value.trim();
   if (!name || !pin) { showToast('Vyplň meno a PIN', 'err'); return; }
@@ -2255,7 +2255,8 @@ function saveTech() {
 
   appData.technicians.push({ id: uid(), name, pin });
   saveLocal();
-  syncCloud();
+  showToast('Ukladám...', '');
+  await syncCloud();
   closeModal('mAddTech');
   renderTechList();
   showToast('Technik pridaný ✓', 'ok');
@@ -2265,9 +2266,9 @@ function deleteTech(id) {
   if (!confirm('Vymazať technika?')) return;
   appData.technicians = appData.technicians.filter(t => t.id !== id);
   saveLocal();
-  syncCloud();
   renderTechList();
   showToast('Technik vymazaný');
+  syncCloud().catch(e => console.warn('Sync failed:', e));
 }
 
 // REPORTS
