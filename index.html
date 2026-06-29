@@ -676,6 +676,11 @@ textarea{resize:vertical;min-height:80px}
       <input type="email" id="rProjEmail" placeholder="vedouci@firma.sk">
     </div>
     <div class="fg">
+      <label>Číslo zákazky</label>
+      <input type="text" id="rProjCislo" placeholder="napr. Z26-05603">
+      <div class="hint">Zobrazí sa v predmete emailu</div>
+    </div>
+    <div class="fg">
       <label>Oprávnení technici (ostatní môžu vidieť ale nie otvoriť)</label>
       <div id="rProjTechList" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px"></div>
       <div class="hint">Ak nevybráš nikoho = majú prístup všetci</div>
@@ -1366,6 +1371,7 @@ async function finishRollout() {
     await sendWebhookRollout({
       to_email: currentRolloutProject.email,
       project_name: currentRolloutProject.name,
+      cislo_zakazky: currentRolloutProject.cislo || '',
       store_name: currentRolloutStore.name,
       store_code: currentRolloutStore.code,
       arrival_time: fmtDateTime(rolloutArrivalTime),
@@ -1453,7 +1459,7 @@ async function generateRolloutPDF(endTime) {
   doc.setTextColor(220,30,30); doc.setFontSize(18); doc.setFont('helvetica','bold');
   doc.text('INSTRACK', M, 15);
   doc.setFontSize(8); doc.setFont('helvetica','normal'); doc.setTextColor(180,180,180);
-  doc.text('Rollout report', M+42, 15);
+  doc.text('Rollout' + (currentRolloutProject.cislo ? ' — ' + t(currentRolloutProject.cislo) : ''), M+42, 15);
   doc.setTextColor(255,255,255); doc.text(fmtDateTime(endTime), W-M, 15, {align:'right'});
   y = 30;
 
@@ -1736,12 +1742,13 @@ async function saveRolloutProject() {
   const minFotoPo = parseInt(document.getElementById('rMinFotoPo').value) || 1;
 
   const compImages = getXLSCompImages();
+  const cislo = document.getElementById('rProjCislo').value.trim();
   const id = document.getElementById('editRolloutId').value;
   if (id) {
     const idx = appData.rolloutProjects.findIndex(p => p.id === id);
-    if (idx >= 0) appData.rolloutProjects[idx] = { ...appData.rolloutProjects[idx], name, from, to, email, stores, allowedTechs, minFotoPred, minFotoPo, compImages };
+    if (idx >= 0) appData.rolloutProjects[idx] = { ...appData.rolloutProjects[idx], name, from, to, email, cislo, stores, allowedTechs, minFotoPred, minFotoPo, compImages };
   } else {
-    appData.rolloutProjects.push({ id: uid(), name, from, to, email, stores, allowedTechs, minFotoPred, minFotoPo, compImages, status: 'active', createdAt: new Date().toISOString() });
+    appData.rolloutProjects.push({ id: uid(), name, from, to, email, cislo, stores, allowedTechs, minFotoPred, minFotoPo, compImages, status: 'active', createdAt: new Date().toISOString() });
   }
 
   saveLocal();
@@ -1773,6 +1780,7 @@ function editRolloutProject(id) {
   document.getElementById('rProjFrom').value = p.from || '';
   document.getElementById('rProjTo').value = p.to || '';
   document.getElementById('rProjEmail').value = p.email || '';
+  document.getElementById('rProjCislo').value = p.cislo || '';
   document.getElementById('rMinFotoPred').value = p.minFotoPred || 1;
   document.getElementById('rMinFotoPo').value = p.minFotoPo || 1;
   document.getElementById('xlsPreview').style.display = 'none';
