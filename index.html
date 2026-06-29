@@ -1694,6 +1694,7 @@ function renderRolloutAdminList() {
           <div class="proj-item-meta" style="margin-top:4px"><span class="tag ${p.status==='active'?'tag-ok':'tag-warn'}">${p.status==='active'?'Aktívny':'Neaktívny'}</span></div>
         </div>
         <div class="proj-actions" style="flex-direction:column;gap:6px">
+          <button class="btn btn-outline btn-sm" onclick="editRolloutProject('${p.id}')">✏️ Upraviť</button>
           <button class="btn btn-outline btn-sm" onclick="toggleRolloutStatus('${p.id}')">${p.status==='active'?'Deaktiv.':'Aktivovať'}</button>
           <button class="btn btn-outline btn-sm" onclick="showResetStoreModal('${p.id}')">🔄 Reset</button>
           <button class="btn-del" onclick="deleteRolloutProject('${p.id}')">✕</button>
@@ -1715,10 +1716,17 @@ async function saveRolloutProject() {
   if (!stores) {
     // Manual input
     const txt = document.getElementById('rProjStoresText')?.value || '';
-    stores = txt.split('\n').filter(Boolean).map(line => {
-      const [code, name] = line.split('|').map(s => s.trim());
-      return { id: uid(), code: code||'', name: name||code||'', components: [] };
-    });
+    if (txt.trim()) {
+      stores = txt.split('\n').filter(Boolean).map(line => {
+        const [code, sname] = line.split('|').map(s => s.trim());
+        return { id: uid(), code: code||'', name: sname||code||'', components: [] };
+      });
+    } else {
+      // Keep existing stores if editing and no new input
+      const existingId = document.getElementById('editRolloutId').value;
+      const existing = appData.rolloutProjects.find(p => p.id === existingId);
+      stores = existing?.stores || [];
+    }
   }
   if (!stores.length) { showToast('Pridaj aspoň jednu predajňu', 'err'); return; }
 
@@ -1753,6 +1761,27 @@ async function saveRolloutProject() {
   // Reset form
   xlsRawData = [];
   document.getElementById('xlsPreview').style.display = 'none';
+}
+
+function editRolloutProject(id) {
+  const p = appData.rolloutProjects.find(p => p.id === id);
+  if (!p) return;
+
+  document.getElementById('editRolloutId').value = id;
+  document.getElementById('mRolloutTitle').textContent = 'Upraviť projekt';
+  document.getElementById('rProjName').value = p.name || '';
+  document.getElementById('rProjFrom').value = p.from || '';
+  document.getElementById('rProjTo').value = p.to || '';
+  document.getElementById('rProjEmail').value = p.email || '';
+  document.getElementById('rMinFotoPred').value = p.minFotoPred || 1;
+  document.getElementById('rMinFotoPo').value = p.minFotoPo || 1;
+  document.getElementById('xlsPreview').style.display = 'none';
+  document.getElementById('rProjStoresManual').style.display = 'none';
+  xlsRawData = [];
+  xlsCompImages = [null,null,null,null,null];
+  xlsCompLabels = p.compImages?.map(c => c.label) || ['Regalbanner kurz 66,5cm','Regalbanner lang 133 vzor 1','Regalbanner lang 133 vzor 2','Regalbanner lang 133 vzor 3','Regalfahne'];
+  populateTechCheckboxes(p.allowedTechs || []);
+  openModal('mNewRollout');
 }
 
 function openNewRolloutModal() {
