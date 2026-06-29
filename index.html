@@ -350,11 +350,18 @@ textarea{resize:vertical;min-height:80px}
           📷 Stav PRED inštaláciou
           <span class="badge" id="predBadge">0 foto</span>
         </div>
-        <label class="upload-area" id="predUploadArea">
-          <input type="file" accept="image/*" multiple onchange="addPhotosNovy('pred', this)">
-          <div class="ua-icon">📸</div>
-          <div class="ua-text"><strong>Pridať fotografie</strong><br>Klikni alebo odfot</div>
-        </label>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:4px">
+          <label class="upload-area" style="margin-bottom:0">
+            <input type="file" accept="image/*" capture="camera" multiple onchange="addPhotosNovy('pred', this)">
+            <div class="ua-icon">📷</div>
+            <div class="ua-text"><strong>Odfotiť</strong></div>
+          </label>
+          <label class="upload-area" style="margin-bottom:0">
+            <input type="file" accept="image/*" multiple onchange="addPhotosNovy('pred', this)">
+            <div class="ua-icon">🖼</div>
+            <div class="ua-text"><strong>Z galérie</strong></div>
+          </label>
+        </div>
         <div class="photos-grid" id="predGrid"></div>
       </div>
     </div>
@@ -366,11 +373,18 @@ textarea{resize:vertical;min-height:80px}
           📷 Stav PO inštalácii
           <span class="badge" id="poBadge">0 foto</span>
         </div>
-        <label class="upload-area" id="poUploadArea">
-          <input type="file" accept="image/*" multiple onchange="addPhotosNovy('po', this)">
-          <div class="ua-icon">📸</div>
-          <div class="ua-text"><strong>Pridať fotografie</strong><br>Klikni alebo odfot</div>
-        </label>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:4px">
+          <label class="upload-area" style="margin-bottom:0">
+            <input type="file" accept="image/*" capture="camera" multiple onchange="addPhotosNovy('po', this)">
+            <div class="ua-icon">📷</div>
+            <div class="ua-text"><strong>Odfotiť</strong></div>
+          </label>
+          <label class="upload-area" style="margin-bottom:0">
+            <input type="file" accept="image/*" multiple onchange="addPhotosNovy('po', this)">
+            <div class="ua-icon">🖼</div>
+            <div class="ua-text"><strong>Z galérie</strong></div>
+          </label>
+        </div>
         <div class="photos-grid" id="poGrid"></div>
       </div>
     </div>
@@ -1225,11 +1239,18 @@ function renderRolloutStepContent() {
         <div style="font-size:12px;color:${ok?'var(--ok)':'var(--accent)'};font-weight:600;margin-bottom:10px">
           ${photos.length} / ${required} fotografií (min. ${required})
         </div>
-        <label class="upload-area">
-          <input type="file" accept="image/*" multiple onchange="addRolloutPhotos('${step.key}', this)">
-          <div class="ua-icon">📷</div>
-          <div class="ua-text"><strong>Pridať fotografie</strong><br>Klikni alebo odfot</div>
-        </label>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:4px">
+          <label class="upload-area" style="margin-bottom:0">
+            <input type="file" accept="image/*" capture="camera" multiple onchange="addRolloutPhotos('${step.key}', this)">
+            <div class="ua-icon">📷</div>
+            <div class="ua-text"><strong>Odfotiť</strong></div>
+          </label>
+          <label class="upload-area" style="margin-bottom:0">
+            <input type="file" accept="image/*" multiple onchange="addRolloutPhotos('${step.key}', this)">
+            <div class="ua-icon">🖼</div>
+            <div class="ua-text"><strong>Z galérie</strong></div>
+          </label>
+        </div>
         <div class="photos-grid" style="margin-top:10px">
           ${photos.map((p,pi) => `<div class="photo-thumb"><img src="${p.data}"><button class="rm" onclick="removeRolloutPhoto('${step.key}',${pi})">✕</button></div>`).join('')}
         </div>
