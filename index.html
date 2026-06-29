@@ -2172,6 +2172,19 @@ async function generateNovyPDF(cislo, endTime) {
   await addPhotoSection('STAV PRED INSTALÁCIOU', novyState.predPhotos);
   await addPhotoSection('STAV PO INSTALÁCII', novyState.poPhotos);
 
+  // Notes
+  const noteVal = document.getElementById('novyNote')?.value || '';
+  if (noteVal) {
+    if (y > 260) { doc.addPage(); y = 20; }
+    doc.setFillColor(20,20,20); doc.rect(M, y, W-2*M, 9, 'F');
+    doc.setFillColor(220,30,30); doc.rect(M, y, 3, 9, 'F');
+    doc.setTextColor(255,255,255); doc.setFontSize(8.5); doc.setFont('helvetica','bold');
+    doc.text('POZNAMKA', M+6, y+6); y += 13;
+    doc.setFontSize(9); doc.setFont('helvetica','normal'); doc.setTextColor(30,30,30);
+    const noteLines = doc.splitTextToSize(t(noteVal), W-2*M-8);
+    noteLines.forEach(line => { doc.text(line, M+4, y); y += 6; });
+  }
+
   // ── FOOTER ──
   const total = doc.internal.getNumberOfPages();
   for (let p = 1; p <= total; p++) {
