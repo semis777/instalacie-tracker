@@ -889,9 +889,8 @@ async function loadRolloutCloud() {
     });
     if (r.ok) {
       const j = await r.json();
-      if (j.record?.rolloutProjects) {
-        appData.rolloutProjects = j.record.rolloutProjects;
-      }
+      // Always overwrite with cloud data (even empty array)
+      appData.rolloutProjects = j.record?.rolloutProjects || [];
     }
   } catch(e) { console.warn('Rollout cloud load failed', e); }
 }
