@@ -695,6 +695,12 @@ textarea{resize:vertical;min-height:80px}
         <input type="number" id="rMinFotoPo" value="1" min="1" max="10">
       </div>
     </div>
+    <div class="fg">
+      <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-weight:600">
+        <input type="checkbox" id="rNoRapport" style="width:18px;height:18px">
+        Rapport nie je potrebný (preskočiť foto rapportu)
+      </label>
+    </div>
 
     <div class="divider"></div>
     <div class="card-title">Import predajní z XLS</div>
@@ -1125,7 +1131,7 @@ function renderRolloutStoreList() {
 // ================================================================
 // ROLLOUT INSTALLATION
 // ================================================================
-const ROLLOUT_STEPS = [
+const ROLLOUT_STEPS_BASE = [
   { id: 'arrival',   title: 'Príchod',            icon: '📍', type: 'auto' },
   { id: 'contact',   title: 'Kontakt vedúceho',   icon: '🤝', type: 'contact' },
   { id: 'photoPred', title: 'Foto PRED',           icon: '📸', type: 'photo', key: 'predPhotos' },
@@ -1134,6 +1140,14 @@ const ROLLOUT_STEPS = [
   { id: 'rapport',   title: 'Rapport',             icon: '📋', type: 'photo', key: 'rapportPhotos' },
   { id: 'finish',    title: 'Ukončenie',           icon: '✅', type: 'finish' }
 ];
+
+// Dynamic steps based on project settings
+function getRolloutSteps() {
+  if (currentRolloutProject?.noRapport) {
+    return ROLLOUT_STEPS_BASE.filter(s => s.id !== 'rapport');
+  }
+  return ROLLOUT_STEPS_BASE;
+}
 
 function startRolloutInstall(storeId) {
   currentRolloutStore = currentRolloutProject.stores.find(s => s.id === storeId);
@@ -1158,6 +1172,10 @@ function startRolloutInstall(storeId) {
     poPhotos: [], rapportPhotos: [],
     note: ''
   };
+  // Reset rapport photos if not needed
+  if (currentRolloutProject?.noRapport) {
+    rolloutStepData.rapportPhotos = [];
+  }
 
   document.getElementById('rInstallProjLabel').textContent = currentRolloutProject.name;
   document.getElementById('rInstallStoreName').textContent = currentRolloutStore.name;
@@ -1183,7 +1201,7 @@ function renderRolloutStep() {
 }
 
 function updateRolloutProgress() {
-  const total = ROLLOUT_STEPS.length;
+  const total = getRolloutSteps().length;
   document.getElementById('rProgText').textContent = rolloutStepIndex + ' / ' + total;
   document.getElementById('rProgFill').style.width = ((rolloutStepIndex / total) * 100) + '%';
 }
@@ -1191,7 +1209,7 @@ function updateRolloutProgress() {
 function renderRolloutDots() {
   const wrap = document.getElementById('rStepDots');
   let html = '';
-  ROLLOUT_STEPS.forEach((s, i) => {
+  getRolloutSteps().forEach((s, i) => {
     if (i > 0) html += '<div class="sline ' + (i <= rolloutStepIndex ? 'done' : '') + '"></div>';
     const cls = i < rolloutStepIndex ? 'done' : (i === rolloutStepIndex ? 'active' : 'wait');
     html += '<div class="sdot ' + cls + '">' + (i < rolloutStepIndex ? '✓' : (i+1)) + '</div>';
@@ -1200,14 +1218,14 @@ function renderRolloutDots() {
 }
 
 function renderRolloutStepContent() {
-  const step = ROLLOUT_STEPS[rolloutStepIndex];
+  const step = getRolloutSteps()[rolloutStepIndex];
   const el = document.getElementById('rStepContent');
   const i = rolloutStepIndex;
 
   if (step.type === 'auto') {
     el.innerHTML = `
       <div class="card">
-        <div class="step-number">Krok ${i+1} z ${ROLLOUT_STEPS.length}</div>
+        <div class="step-number">Krok ${i+1} z ${getRolloutSteps().length}</div>
         <div class="step-title">${step.icon} ${step.title}</div>
         <div class="info-chips">
           <div class="chip"><div class="cl">Čas príchodu</div><div class="cv">${fmtTime(rolloutArrivalTime)}</div></div>
@@ -1220,7 +1238,7 @@ function renderRolloutStepContent() {
   else if (step.type === 'contact') {
     el.innerHTML = `
       <div class="card">
-        <div class="step-number">Krok ${i+1} z ${ROLLOUT_STEPS.length}</div>
+        <div class="step-number">Krok ${i+1} z ${getRolloutSteps().length}</div>
         <div class="step-title">${step.icon} ${step.title}</div>
         <div class="fg">
           <label>Meno vedúceho *</label>
@@ -1242,7 +1260,7 @@ function renderRolloutStepContent() {
     const ok = photos.length >= required;
     el.innerHTML = `
       <div class="card">
-        <div class="step-number">Krok ${i+1} z ${ROLLOUT_STEPS.length}</div>
+        <div class="step-number">Krok ${i+1} z ${getRolloutSteps().length}</div>
         <div class="step-title">${step.icon} ${step.title}</div>
         <div style="font-size:12px;color:${ok?'var(--ok)':'var(--accent)'};font-weight:600;margin-bottom:10px">
           ${photos.length} / ${required} fotografií (min. ${required})
@@ -1275,7 +1293,7 @@ function renderRolloutStepContent() {
     const allChecked = activeChecks.every(Boolean);
     el.innerHTML = `
       <div class="card">
-        <div class="step-number">Krok ${i+1} z ${ROLLOUT_STEPS.length}</div>
+        <div class="step-number">Krok ${i+1} z ${getRolloutSteps().length}</div>
         <div class="step-title">${step.icon} ${step.title}</div>
         <ul class="check-list">
           ${comps.map((c, ci) => {
@@ -1301,7 +1319,7 @@ function renderRolloutStepContent() {
   else if (step.type === 'finish') {
     el.innerHTML = `
       <div class="card">
-        <div class="step-number">Krok ${i+1} z ${ROLLOUT_STEPS.length}</div>
+        <div class="step-number">Krok ${i+1} z ${getRolloutSteps().length}</div>
         <div class="step-title">${step.icon} ${step.title}</div>
         <p style="color:var(--muted);font-size:14px;margin-bottom:16px">Skontroluj kompletnosť všetkých krokov a dokonči inštaláciu.</p>
         <div class="info-chips">
@@ -1746,12 +1764,13 @@ async function saveRolloutProject() {
 
   const compImages = getXLSCompImages();
   const cislo = document.getElementById('rProjCislo').value.trim();
+  const noRapport = document.getElementById('rNoRapport').checked;
   const id = document.getElementById('editRolloutId').value;
   if (id) {
     const idx = appData.rolloutProjects.findIndex(p => p.id === id);
-    if (idx >= 0) appData.rolloutProjects[idx] = { ...appData.rolloutProjects[idx], name, from, to, email, cislo, stores, allowedTechs, minFotoPred, minFotoPo, compImages };
+    if (idx >= 0) appData.rolloutProjects[idx] = { ...appData.rolloutProjects[idx], name, from, to, email, cislo, stores, allowedTechs, minFotoPred, minFotoPo, noRapport, compImages };
   } else {
-    appData.rolloutProjects.push({ id: uid(), name, from, to, email, cislo, stores, allowedTechs, minFotoPred, minFotoPo, compImages, status: 'active', createdAt: new Date().toISOString() });
+    appData.rolloutProjects.push({ id: uid(), name, from, to, email, cislo, stores, allowedTechs, minFotoPred, minFotoPo, noRapport, compImages, status: 'active', createdAt: new Date().toISOString() });
   }
 
   saveLocal();
@@ -1786,6 +1805,7 @@ function editRolloutProject(id) {
   document.getElementById('rProjCislo').value = p.cislo || '';
   document.getElementById('rMinFotoPred').value = p.minFotoPred || 1;
   document.getElementById('rMinFotoPo').value = p.minFotoPo || 1;
+  document.getElementById('rNoRapport').checked = p.noRapport || false;
   document.getElementById('xlsPreview').style.display = 'none';
   document.getElementById('rProjStoresManual').style.display = 'none';
   xlsRawData = [];
