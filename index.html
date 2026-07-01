@@ -1055,10 +1055,8 @@ function renderDashboard() {
       if (rollouts.length === 1) selectRolloutProject(rollouts[0].id);
       else { list.style.display = 'block'; renderRolloutList(); }
     };
-    if (rollouts.length > 1) {
-      list.style.display = 'block';
-      renderRolloutList();
-    }
+    list.style.display = 'block';
+    renderRolloutList();
   } else {
     tile.classList.add('disabled');
     list.style.display = 'none';
