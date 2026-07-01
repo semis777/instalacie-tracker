@@ -935,6 +935,18 @@ function showScreen(id) {
       renderRolloutStoreList();
     }, 60000); // every 60 seconds only on store list
   }
+  if (id === 'sDash') {
+    // Refresh immediately (project deleted/added/deactivated by admin while
+    // this technician was already logged in wouldn't otherwise show up)
+    (async () => {
+      await loadRolloutCloud();
+      renderDashboard();
+    })();
+    _refreshTimer = setInterval(async () => {
+      await loadRolloutCloud();
+      renderDashboard();
+    }, 60000); // keep dashboard in sync every 60 seconds too
+  }
 }
 
 // ================================================================
@@ -1834,7 +1846,7 @@ function openNewRolloutModal() {
 
 function toggleRolloutStatus(id) {
   const p = appData.rolloutProjects.find(p => p.id === id);
-  if (p) { p.status = p.status === 'active' ? 'inactive' : 'active'; saveLocal(); syncCloud(); renderRolloutAdminList(); renderDashboard(); }
+  if (p) { p.status = p.status === 'active' ? 'inactive' : 'active'; saveLocal(); syncRolloutCloud(); renderRolloutAdminList(); renderDashboard(); }
 }
 
 let _resetProjId = null;
