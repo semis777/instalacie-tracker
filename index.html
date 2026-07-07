@@ -706,7 +706,7 @@ textarea{resize:vertical;min-height:80px}
     <div class="card-title">Import predajní/lokalít z XLS</div>
 
     <label class="import-area">
-      <input type="file" accept=".xlsx,.xls" onchange="univImportXLS(this)">
+      <input type="file" id="univFileInput" accept=".xlsx,.xls" onchange="univImportXLS(this)">
       <div class="import-icon">📊</div>
       <div class="import-text"><strong>Klikni a vyber XLS súbor</strong><br>Ľubovoľný formát — stĺpce si namapuješ nižšie</div>
     </label>
@@ -827,6 +827,9 @@ function univImportXLS(input) {
     renderUnivColumnMapper();
   };
   reader.readAsArrayBuffer(file);
+  // Reset the input value so selecting the exact same file again later
+  // (e.g. after deleting and recreating a project) still fires 'change'
+  input.value = '';
 }
 
 function univGetColCount() {
@@ -977,6 +980,8 @@ function univResetImportState() {
   univCompImages = {};
   const area = document.getElementById('univImportArea');
   if (area) area.style.display = 'none';
+  const fileInput = document.getElementById('univFileInput');
+  if (fileInput) fileInput.value = '';
 }
 
 // Rollout state
