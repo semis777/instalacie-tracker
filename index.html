@@ -703,24 +703,31 @@ textarea{resize:vertical;min-height:80px}
     </div>
 
     <div class="divider"></div>
-    <div class="card-title">Import predajní z XLS</div>
+    <div class="card-title">Import predajní/lokalít z XLS</div>
 
     <label class="import-area">
-      <input type="file" accept=".xlsx,.xls" onchange="importXLS(this)">
+      <input type="file" accept=".xlsx,.xls" onchange="univImportXLS(this)">
       <div class="import-icon">📊</div>
-      <div class="import-text"><strong>Klikni a vyber XLS súbor</strong><br>Formát: stĺpce C, D, E, J, K, L, M, N</div>
+      <div class="import-text"><strong>Klikni a vyber XLS súbor</strong><br>Ľubovoľný formát — stĺpce si namapuješ nižšie</div>
     </label>
 
-    <div id="xlsPreview" style="display:none">
-      <div class="fg">
-        <label>Filter stĺpec C (GES) — vyber hodnotu</label>
-        <select id="xlsFilterVal"></select>
+    <div id="univImportArea" style="display:none">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="fg">
+          <label>Riadok s hlavičkou</label>
+          <input type="number" id="univHeaderRow" min="0" value="0" oninput="renderUnivColumnMapper()">
+          <div class="hint">Číslo riadku v Exceli, 0 = žiadna hlavička</div>
+        </div>
+        <div class="fg">
+          <label>Prvý riadok s dátami</label>
+          <input type="number" id="univDataStartRow" min="1" value="1" oninput="renderUnivColumnMapper()">
+        </div>
       </div>
-      <div id="xlsStoreCount" style="font-size:13px;color:var(--muted);margin-bottom:12px"></div>
       <div class="fg">
-        <label>Názvy a obrázky komponentov (stĺpce J–N)</label>
-        <div id="xlsCompNames"></div>
+        <label>Namapuj stĺpce</label>
+        <div id="univColMapper"></div>
       </div>
+      <div id="univPreviewInfo" style="font-size:13px;font-weight:600;color:var(--accent);margin:8px 0"></div>
     </div>
 
     <div id="rProjStoresManual" style="display:none">
@@ -790,9 +797,187 @@ let novyState = {
 // PIN input
 let pinInput = '';
 
-// XLS import state
-let xlsRawData = [];
-let xlsCompLabels = ['Regalbanner kurz 66,5cm', 'Regalbanner lang 133 vzor 1', 'Regalbanner lang 133 vzor 2', 'Regalbanner lang 133 vzor 3', 'Regalfahne'];
+// ================================================================
+// UNIVERSAL XLS IMPORT (column mapping)
+// ================================================================
+let univRows = [];          // raw array-of-arrays from sheet
+let univColRoles = {};      // { colIndex: { role, label } }
+let univCompImages = {};    // { colIndex: dataURL }
+
+function univColLetter(idx) {
+  let s = '', n = idx;
+  do { s = String.fromCharCode(65 + (n % 26)) + s; n = Math.floor(n / 26) - 1; } while (n >= 0);
+  return s;
+}
+
+function univImportXLS(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const data = new Uint8Array(e.target.result);
+    const wb = XLSX.read(data, { type: 'array' });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    univRows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
+    univColRoles = {};
+    univCompImages = {};
+    document.getElementById('univImportArea').style.display = 'block';
+    document.getElementById('univHeaderRow').value = 0;
+    document.getElementById('univDataStartRow').value = 1;
+    renderUnivColumnMapper();
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function univGetColCount() {
+  let max = 0;
+  univRows.slice(0, 30).forEach(r => { if (r) max = Math.max(max, r.length); });
+  return Math.min(max, 30);
+}
+
+function univSetColRole(ci, role) {
+  univColRoles[ci] = univColRoles[ci] || { role: 'ignore', label: '' };
+  univColRoles[ci].role = role;
+  renderUnivColumnMapper();
+}
+
+function univSetColLabel(ci, label) {
+  univColRoles[ci] = univColRoles[ci] || { role: 'ignore', label: '' };
+  univColRoles[ci].label = label;
+}
+
+function univAddCompImage(ci, input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const img = new Image();
+    img.onload = () => {
+      const MAX = 300;
+      let w = img.width, h = img.height;
+      if (w > MAX || h > MAX) {
+        if (w > h) { h = Math.round(h * MAX / w); w = MAX; } else { w = Math.round(w * MAX / h); h = MAX; }
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      univCompImages[ci] = canvas.toDataURL('image/jpeg', 0.5);
+      renderUnivColumnMapper();
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function renderUnivColumnMapper() {
+  if (!univRows.length) return;
+  const headerRowNum = parseInt(document.getElementById('univHeaderRow').value) || 0;
+  const dataStartNum = parseInt(document.getElementById('univDataStartRow').value) || 1;
+  const headerIdx = headerRowNum > 0 ? headerRowNum - 1 : -1;
+  const colCount = univGetColCount();
+  const wrap = document.getElementById('univColMapper');
+
+  const roleOptions = [
+    ['ignore', 'Nepoužiť'],
+    ['name', 'Časť názvu'],
+    ['code', 'Kód'],
+    ['info', 'Info pole'],
+    ['component', 'Komponent (počet)']
+  ];
+
+  let html = '';
+  for (let ci = 0; ci < colCount; ci++) {
+    const header = headerIdx >= 0 ? univRows[headerIdx]?.[ci] : null;
+    let sample = null;
+    for (let r = dataStartNum - 1; r < Math.min(univRows.length, dataStartNum + 15); r++) {
+      const v = univRows[r]?.[ci];
+      if (v !== null && v !== undefined && v !== '') { sample = v; break; }
+    }
+    if (!univColRoles[ci]) univColRoles[ci] = { role: 'ignore', label: header != null ? String(header) : '' };
+    const state = univColRoles[ci];
+    const showLabelInput = state.role === 'info' || state.role === 'component';
+    const showImgUpload = state.role === 'component';
+
+    html += `
+      <div style="display:flex;gap:8px;align-items:center;background:var(--bg);border-radius:8px;padding:8px 10px;margin-bottom:6px;flex-wrap:wrap">
+        <div style="width:24px;font-weight:700;font-size:12px;color:var(--muted)">${univColLetter(ci)}</div>
+        <div style="flex:1;min-width:80px">
+          <div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(header != null ? String(header) : '(bez názvu)')}</div>
+          <div style="font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(sample != null ? String(sample) : '')}</div>
+        </div>
+        <select onchange="univSetColRole(${ci}, this.value)" style="width:150px;flex-shrink:0">
+          ${roleOptions.map(([v, l]) => `<option value="${v}" ${state.role === v ? 'selected' : ''}>${l}</option>`).join('')}
+        </select>
+        ${showLabelInput ? `<input type="text" placeholder="Popis" value="${esc(state.label || '')}" oninput="univSetColLabel(${ci}, this.value)" style="width:120px;flex-shrink:0">` : ''}
+        ${showImgUpload ? `<label style="cursor:pointer;font-size:11px;color:var(--accent);font-weight:600;flex-shrink:0;white-space:nowrap">
+          📷${univCompImages[ci] ? ' ✓' : ''}
+          <input type="file" accept="image/*" style="display:none" onchange="univAddCompImage(${ci}, this)">
+        </label>` : ''}
+      </div>`;
+  }
+  wrap.innerHTML = html;
+  univUpdatePreview();
+}
+
+function univUpdatePreview() {
+  const stores = univGetStores();
+  document.getElementById('univPreviewInfo').textContent = stores
+    ? `✓ Nájdených lokalít: ${stores.length}`
+    : 'Vyber aspoň jeden stĺpec ako "Časť názvu".';
+}
+
+function univGetStores() {
+  if (!univRows.length) return null;
+  const dataStartNum = parseInt(document.getElementById('univDataStartRow')?.value) || 1;
+  const startIdx = dataStartNum - 1;
+
+  const colsWithRole = (role) => Object.keys(univColRoles).map(Number)
+    .filter(ci => univColRoles[ci].role === role).sort((a, b) => a - b);
+  const nameCols = colsWithRole('name');
+  const codeCols = colsWithRole('code');
+  const infoCols = colsWithRole('info');
+  const compCols = colsWithRole('component');
+  if (!nameCols.length) return null;
+
+  const nonEmpty = v => v !== null && v !== undefined && String(v).trim() !== '';
+
+  const stores = [];
+  for (let r = startIdx; r < univRows.length; r++) {
+    const row = univRows[r];
+    if (!row) continue;
+    if (!nonEmpty(row[nameCols[0]])) continue; // primary name column marks a real data row
+
+    const name = nameCols.map(ci => row[ci]).filter(nonEmpty).map(v => String(v).trim()).join(' – ');
+    const code = codeCols.map(ci => row[ci]).filter(nonEmpty).map(v => String(v).trim()).join(' ');
+    const infoFields = infoCols.map(ci => {
+      const v = row[ci];
+      if (!nonEmpty(v)) return null;
+      return { label: univColRoles[ci].label || univColLetter(ci), value: String(v).trim() };
+    }).filter(Boolean);
+    const components = compCols.map(ci => {
+      const v = row[ci];
+      const count = typeof v === 'number' ? v : (parseFloat(v) || 0);
+      return { label: univColRoles[ci].label || univColLetter(ci), count };
+    });
+
+    stores.push({ id: uid(), code, name, infoFields, components });
+  }
+  return stores;
+}
+
+function univGetCompImages() {
+  const compCols = Object.keys(univColRoles).map(Number)
+    .filter(ci => univColRoles[ci].role === 'component').sort((a, b) => a - b);
+  return compCols.map(ci => ({ label: univColRoles[ci].label || univColLetter(ci), image: univCompImages[ci] || null }));
+}
+
+function univResetImportState() {
+  univRows = [];
+  univColRoles = {};
+  univCompImages = {};
+  const area = document.getElementById('univImportArea');
+  if (area) area.style.display = 'none';
+}
 
 // Rollout state
 let currentRolloutProject = null;
@@ -1124,7 +1309,8 @@ function renderRolloutStoreList() {
         <div class="store-item" onclick="${canOpen ? `startRolloutInstall('${s.id}')` : `showToast('Nemáš prístup k tomuto projektu','err')`}">
           <div style="flex:1">
             <div class="si-name">${esc(s.name)}</div>
-            <div class="si-code">Kód: ${esc(s.code)}</div>
+            ${s.code ? `<div class="si-code">Kód: ${esc(s.code)}</div>` : ''}
+            ${(s.infoFields||[]).length ? `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px">${s.infoFields.map(f => `<span style="font-size:10px;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:2px 6px;color:var(--muted)"><b>${esc(f.label)}:</b> ${esc(f.value)}</span>`).join('')}</div>` : ''}
           </div>
           <div style="display:flex;align-items:center;gap:6px">
             <span class="si-status ${done?'done':'pending'}">${done?'Hotovo':'Čaká'}</span>
@@ -1152,10 +1338,15 @@ const ROLLOUT_STEPS_BASE = [
 
 // Dynamic steps based on project settings
 function getRolloutSteps() {
+  let steps = ROLLOUT_STEPS_BASE;
   if (currentRolloutProject?.noRapport) {
-    return ROLLOUT_STEPS_BASE.filter(s => s.id !== 'rapport');
+    steps = steps.filter(s => s.id !== 'rapport');
   }
-  return ROLLOUT_STEPS_BASE;
+  const hasComponents = currentRolloutProject?.stores?.some(s => (s.components||[]).length > 0);
+  if (!hasComponents) {
+    steps = steps.filter(s => s.id !== 'install');
+  }
+  return steps;
 }
 
 function startRolloutInstall(storeId) {
@@ -1240,7 +1431,8 @@ function renderRolloutStepContent() {
           <div class="chip"><div class="cl">Čas príchodu</div><div class="cv">${fmtTime(rolloutArrivalTime)}</div></div>
           <div class="chip"><div class="cl">GPS</div><div class="cv" style="font-size:11px">${rolloutGPS ? rolloutGPS.lat+', '+rolloutGPS.lng : 'Získavam...'}</div></div>
         </div>
-        <div class="chip" style="margin-top:8px"><div class="cl">Predajňa</div><div class="cv">${esc(currentRolloutStore.name)} (${esc(currentRolloutStore.code)})</div></div>
+        <div class="chip" style="margin-top:8px"><div class="cl">Predajňa</div><div class="cv">${esc(currentRolloutStore.name)}${currentRolloutStore.code ? ' (' + esc(currentRolloutStore.code) + ')' : ''}</div></div>
+        ${(currentRolloutStore.infoFields||[]).length ? `<div class="info-chips" style="margin-top:8px">${currentRolloutStore.infoFields.map(f => `<div class="chip"><div class="cl">${esc(f.label)}</div><div class="cv">${esc(f.value)}</div></div>`).join('')}</div>` : ''}
       </div>
       <button class="btn btn-primary" onclick="nextRolloutStep()">Pokračovať →</button>`;
   }
@@ -1585,110 +1777,6 @@ async function generateRolloutPDF(endTime) {
 // ================================================================
 // XLS IMPORT
 // ================================================================
-function importXLS(input) {
-  const file = input.files[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = (e) => {
-    const data = new Uint8Array(e.target.result);
-    const wb = XLSX.read(data, { type: 'array' });
-    const ws = wb.Sheets[wb.SheetNames[0]];
-    const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
-
-    // Get data from row 11+ (index 10)
-    xlsRawData = rows.slice(10).filter(r => r && r[2] !== null && r[2] !== undefined);
-
-    // Get unique values of column C (index 2)
-    const cVals = [...new Set(xlsRawData.map(r => r[2]).filter(v => v !== null))].sort();
-    const sel = document.getElementById('xlsFilterVal');
-    sel.innerHTML = cVals.map(v => `<option value="${v}" ${v==5?'selected':''}>${v}</option>`).join('');
-
-    document.getElementById('xlsPreview').style.display = 'block';
-    updateXLSPreview();
-    sel.onchange = updateXLSPreview;
-
-    // Render component name inputs
-    renderCompNameInputs();
-  };
-  reader.readAsArrayBuffer(file);
-}
-
-// Component images storage
-let xlsCompImages = [null, null, null, null, null];
-
-function renderCompNameInputs() {
-  const wrap = document.getElementById('xlsCompNames');
-  const cols = ['J','K','L','M','N'];
-  wrap.innerHTML = cols.map((c,i) => `
-    <div style="background:var(--bg);border-radius:8px;padding:12px;margin-bottom:8px">
-      <div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:6px">STĹPEC ${c}</div>
-      <input type="text" id="compLabel_${i}" value="${xlsCompLabels[i]}" placeholder="Názov komponentu" oninput="xlsCompLabels[${i}]=this.value" style="margin-bottom:8px">
-      <div style="display:flex;align-items:center;gap:10px">
-        <label style="cursor:pointer;font-size:12px;color:var(--accent);font-weight:600">
-          📷 ${xlsCompImages[i] ? 'Zmeniť obrázok' : 'Pridať obrázok'}
-          <input type="file" accept="image/*" style="display:none" onchange="addCompImage(${i},this)">
-        </label>
-        ${xlsCompImages[i] ? `<img src="${xlsCompImages[i]}" style="width:48px;height:36px;object-fit:cover;border-radius:4px;border:1px solid var(--border)">
-          <button onclick="xlsCompImages[${i}]=null;renderCompNameInputs()" style="background:none;border:none;color:var(--err);cursor:pointer;font-size:12px">✕</button>` : ''}
-      </div>
-    </div>
-  `).join('');
-}
-
-function addCompImage(idx, input) {
-  const file = input.files[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = e => {
-    const img = new Image();
-    img.onload = () => {
-      const MAX = 300;
-      let w = img.width, h = img.height;
-      if (w > MAX || h > MAX) {
-        if (w > h) { h = Math.round(h*MAX/w); w = MAX; } else { w = Math.round(w*MAX/h); h = MAX; }
-      }
-      const canvas = document.createElement('canvas');
-      canvas.width = w; canvas.height = h;
-      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-      xlsCompImages[idx] = canvas.toDataURL('image/jpeg', 0.5);
-      renderCompNameInputs();
-    };
-    img.src = e.target.result;
-  };
-  reader.readAsDataURL(file);
-}
-
-function updateXLSPreview() {
-  const filterVal = parseFloat(document.getElementById('xlsFilterVal').value) || document.getElementById('xlsFilterVal').value;
-  const filtered = xlsRawData.filter(r => r[2] == filterVal);
-  document.getElementById('xlsStoreCount').textContent = 'Nájdených predajní: ' + filtered.length;
-}
-
-function getXLSStores() {
-  if (!xlsRawData.length) return null;
-  const filterVal = parseFloat(document.getElementById('xlsFilterVal')?.value) || document.getElementById('xlsFilterVal')?.value;
-  const filtered = xlsRawData.filter(r => r[2] == filterVal);
-  const compCols = [9,10,11,12,13]; // J,K,L,M,N (0-indexed)
-  return filtered.map(r => ({
-    id: uid(),
-    code: String(r[3] || ''),
-    name: String(r[4] || ''),
-    // Only store count per store - images are at project level
-    components: compCols.map((ci,i) => ({
-      label: xlsCompLabels[i],
-      count: r[ci] || 0
-    }))
-  }));
-}
-
-function getXLSCompImages() {
-  // Returns component images at project level (one set for all stores)
-  return xlsCompLabels.map((label, i) => ({
-    label,
-    image: xlsCompImages[i] || null
-  }));
-}
-
 function toggleManualStores() {
   const el = document.getElementById('rProjStoresManual');
   el.style.display = el.style.display === 'none' ? 'block' : 'none';
@@ -1748,33 +1836,38 @@ async function saveRolloutProject() {
 
   if (!name || !email) { showToast('Vyplň názov a email', 'err'); return; }
 
-  let stores = getXLSStores();
-  if (!stores) {
+  const existingId = document.getElementById('editRolloutId').value;
+  const existing = appData.rolloutProjects.find(p => p.id === existingId);
+
+  let stores = univGetStores();
+  let compImages;
+  if (stores) {
+    compImages = univGetCompImages();
+  } else {
     // Manual input
     const txt = document.getElementById('rProjStoresText')?.value || '';
     if (txt.trim()) {
       stores = txt.split('\n').filter(Boolean).map(line => {
         const [code, sname] = line.split('|').map(s => s.trim());
-        return { id: uid(), code: code||'', name: sname||code||'', components: [] };
+        return { id: uid(), code: code||'', name: sname||code||'', infoFields: [], components: [] };
       });
+      compImages = [];
     } else {
-      // Keep existing stores if editing and no new input
-      const existingId = document.getElementById('editRolloutId').value;
-      const existing = appData.rolloutProjects.find(p => p.id === existingId);
+      // Keep existing stores/compImages if editing and no new input
       stores = existing?.stores || [];
+      compImages = existing?.compImages || [];
     }
   }
-  if (!stores.length) { showToast('Pridaj aspoň jednu predajňu', 'err'); return; }
+  if (!stores.length) { showToast('Pridaj aspoň jednu predajňu/lokalitu', 'err'); return; }
 
   // Get allowed technicians
   const allowedTechs = Array.from(document.querySelectorAll('.tech-check:checked')).map(cb => cb.value);
   const minFotoPred = parseInt(document.getElementById('rMinFotoPred').value) || 1;
   const minFotoPo = parseInt(document.getElementById('rMinFotoPo').value) || 1;
 
-  const compImages = getXLSCompImages();
   const cislo = document.getElementById('rProjCislo').value.trim();
   const noRapport = document.getElementById('rNoRapport').checked;
-  const id = document.getElementById('editRolloutId').value;
+  const id = existingId;
   if (id) {
     const idx = appData.rolloutProjects.findIndex(p => p.id === id);
     if (idx >= 0) appData.rolloutProjects[idx] = { ...appData.rolloutProjects[idx], name, from, to, email, cislo, stores, allowedTechs, minFotoPred, minFotoPo, noRapport, compImages };
@@ -1797,8 +1890,7 @@ async function saveRolloutProject() {
   }
 
   // Reset form
-  xlsRawData = [];
-  document.getElementById('xlsPreview').style.display = 'none';
+  univResetImportState();
 }
 
 function editRolloutProject(id) {
@@ -1815,11 +1907,8 @@ function editRolloutProject(id) {
   document.getElementById('rMinFotoPred').value = p.minFotoPred || 1;
   document.getElementById('rMinFotoPo').value = p.minFotoPo || 1;
   document.getElementById('rNoRapport').checked = p.noRapport || false;
-  document.getElementById('xlsPreview').style.display = 'none';
   document.getElementById('rProjStoresManual').style.display = 'none';
-  xlsRawData = [];
-  xlsCompImages = [null,null,null,null,null];
-  xlsCompLabels = p.compImages?.map(c => c.label) || ['Regalbanner kurz 66,5cm','Regalbanner lang 133 vzor 1','Regalbanner lang 133 vzor 2','Regalbanner lang 133 vzor 3','Regalfahne'];
+  univResetImportState();
   populateTechCheckboxes(p.allowedTechs || []);
   openModal('mNewRollout');
 }
@@ -1833,11 +1922,8 @@ function openNewRolloutModal() {
   document.getElementById('rProjEmail').value = '';
   document.getElementById('rMinFotoPred').value = 1;
   document.getElementById('rMinFotoPo').value = 1;
-  document.getElementById('xlsPreview').style.display = 'none';
   document.getElementById('rProjStoresManual').style.display = 'none';
-  xlsRawData = [];
-  xlsCompImages = [null,null,null,null,null];
-  xlsCompLabels = ['Regalbanner kurz 66,5cm','Regalbanner lang 133 vzor 1','Regalbanner lang 133 vzor 2','Regalbanner lang 133 vzor 3','Regalfahne'];
+  univResetImportState();
   populateTechCheckboxes([]);
   openModal('mNewRollout');
 }
