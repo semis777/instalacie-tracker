@@ -1610,7 +1610,7 @@ async function finishRollout() {
       note: rolloutStepData.note || '',
       photo_count: rolloutStepData.predPhotos.length + rolloutStepData.poPhotos.length + rolloutStepData.rapportPhotos.length,
       pdf_base64: pdfBase64,
-      pdf_filename: 'Rollout_' + currentRolloutStore.code + '_' + fmtDateFile(endTime) + '.pdf'
+      pdf_filename: 'Rollout_' + String(currentRolloutStore.code || currentRolloutStore.name).replace(/[^a-zA-Z0-9]/g,'_') + '_' + fmtDateFile(endTime) + '.pdf'
     });
 
     appData.reports.push({
