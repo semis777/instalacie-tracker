@@ -443,6 +443,16 @@ textarea{resize:vertical;min-height:80px}
     </div>
     <div class="card">
       <div class="card-title">Vyber predajňu</div>
+      <div style="margin-bottom:12px">
+        <input type="text" id="rolloutSearchInput" placeholder="🔍 Hľadaj predajňu..."
+          oninput="rolloutSearchQuery=this.value;renderRolloutStoreList(true)"
+          style="margin-bottom:8px">
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
+          <input type="checkbox" id="rolloutSortAZCheck" onchange="rolloutSortAZ=this.checked;renderRolloutStoreList(true)">
+          Radiť A–Z
+        </label>
+      </div>
+      <div id="rolloutStoreCount" style="font-size:12px;color:var(--muted);margin-bottom:8px"></div>
       <div id="rolloutStoreList"></div>
     </div>
   </div>
@@ -1278,12 +1288,18 @@ function selectRolloutProject(id) {
 let rolloutSortAZ = false;
 let rolloutSearchQuery = '';
 
-function renderRolloutStoreList() {
+function renderRolloutStoreList(skipInputSync) {
   const el = document.getElementById('rolloutStoreList');
   if (!currentRolloutProject?.stores?.length) {
     el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--muted);">Žiadne predajne.</div>';
     return;
   }
+
+  // Sync static controls without touching the input the user is typing in
+  const searchInput = document.getElementById('rolloutSearchInput');
+  const sortCheck = document.getElementById('rolloutSortAZCheck');
+  if (searchInput && !skipInputSync && searchInput.value !== rolloutSearchQuery) searchInput.value = rolloutSearchQuery;
+  if (sortCheck) sortCheck.checked = !!rolloutSortAZ;
 
   const hasAccess = !currentRolloutProject.allowedTechs?.length || currentRolloutProject.allowedTechs.includes(currentUser?.pin) || currentUser?.isAdmin;
 
@@ -1294,17 +1310,9 @@ function renderRolloutStoreList() {
     stores = stores.filter(s => s.name.toLowerCase().includes(q) || s.code.toLowerCase().includes(q));
   }
 
+  document.getElementById('rolloutStoreCount').textContent = `${stores.length} predajní`;
+
   el.innerHTML = `
-    <div style="margin-bottom:12px">
-      <input type="text" placeholder="🔍 Hľadaj predajňu..." value="${esc(rolloutSearchQuery)}"
-        oninput="rolloutSearchQuery=this.value;renderRolloutStoreList()"
-        style="margin-bottom:8px">
-      <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
-        <input type="checkbox" ${rolloutSortAZ?'checked':''} onchange="rolloutSortAZ=this.checked;renderRolloutStoreList()">
-        Radiť A–Z
-      </label>
-    </div>
-    <div style="font-size:12px;color:var(--muted);margin-bottom:8px">${stores.length} predajní</div>
     ${stores.map(s => {
       const done = appData.reports.some(r => r.rolloutProjectId === currentRolloutProject.id && r.storeId === s.id && r.completed);
       const canOpen = !currentRolloutProject.allowedTechs?.length ||
