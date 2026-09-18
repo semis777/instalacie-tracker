@@ -711,6 +711,38 @@ textarea{resize:vertical;min-height:80px}
         Rapport nie je potrebný (preskočiť foto rapportu)
       </label>
     </div>
+    <div class="fg">
+      <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-weight:600">
+        <input type="checkbox" id="rRequireContact" checked style="width:18px;height:18px">
+        Kontakt vedúceho je potrebný
+      </label>
+      <div class="hint">Ak vypneš, krok "Kontakt vedúceho" sa technikovi vôbec nezobrazí</div>
+    </div>
+    <div class="fg">
+      <label>Jazyk PDF reportu a emailu</label>
+      <select id="rProjLang">
+        <option value="sk">Slovensky</option>
+        <option value="de">Nemecky (AT rollout)</option>
+      </select>
+      <div class="hint">Appka pre technika zostáva vždy po slovensky — týka sa len výsledného PDF a emailu</div>
+    </div>
+    <div class="fg">
+      <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-weight:600">
+        <input type="checkbox" id="rTrackDamage" onchange="toggleDamageReasonsUI()" style="width:18px;height:18px">
+        Sledovať poškodenie lokalít (AT rollout)
+      </label>
+      <div class="hint">Pridá krok "Poškodená" s dôvodom a popisom + export do XLS v admin paneli</div>
+    </div>
+    <div class="fg" id="rDamageReasonsWrap" style="display:none">
+      <label>Dôvody poškodenia (každý na samostatný riadok)</label>
+      <textarea id="rDamageReasons" rows="6">Roztrhnutá/poškodená fólia
+Vyblednuté farby
+Graffiti / Vandalizmus
+Chýbajúci komponent
+Poškodená konštrukcia/rám
+Znečistenie
+Iné</textarea>
+    </div>
 
     <div class="divider"></div>
     <div class="card-title">Import predajní/lokalít z XLS</div>
@@ -720,6 +752,8 @@ textarea{resize:vertical;min-height:80px}
       <div class="import-icon">📊</div>
       <div class="import-text"><strong>Klikni a vyber XLS súbor</strong><br>Ľubovoľný formát — stĺpce si namapuješ nižšie</div>
     </label>
+
+    <div id="univSheetPicker" style="display:none;margin-bottom:10px"></div>
 
     <div id="univImportArea" style="display:none">
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
@@ -810,7 +844,10 @@ let pinInput = '';
 // ================================================================
 // UNIVERSAL XLS IMPORT (column mapping)
 // ================================================================
-let univRows = [];          // raw array-of-arrays from sheet
+let univSheets = [];        // [{ name, rows }] — all sheets in the workbook
+let univMergeAll = true;    // merge rows from all sheets vs use just one
+let univActiveSheetIdx = 0; // which sheet is used when not merging
+let univRows = [];          // rows used for the column-mapper preview (one representative sheet)
 let univColRoles = {};      // { colIndex: { role, label } }
 let univCompImages = {};    // { colIndex: dataURL }
 
@@ -827,19 +864,57 @@ function univImportXLS(input) {
   reader.onload = (e) => {
     const data = new Uint8Array(e.target.result);
     const wb = XLSX.read(data, { type: 'array' });
-    const ws = wb.Sheets[wb.SheetNames[0]];
-    univRows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
+    univSheets = wb.SheetNames.map(name => ({
+      name,
+      rows: XLSX.utils.sheet_to_json(wb.Sheets[name], { header: 1, defval: null })
+    }));
+    univMergeAll = true;
+    univActiveSheetIdx = 0;
+    univRows = univSheets[0].rows;
     univColRoles = {};
     univCompImages = {};
     document.getElementById('univImportArea').style.display = 'block';
     document.getElementById('univHeaderRow').value = 0;
     document.getElementById('univDataStartRow').value = 1;
+    renderUnivSheetPicker();
     renderUnivColumnMapper();
   };
   reader.readAsArrayBuffer(file);
   // Reset the input value so selecting the exact same file again later
   // (e.g. after deleting and recreating a project) still fires 'change'
   input.value = '';
+}
+
+function renderUnivSheetPicker() {
+  const wrap = document.getElementById('univSheetPicker');
+  if (!wrap) return;
+  if (univSheets.length <= 1) { wrap.style.display = 'none'; wrap.innerHTML = ''; return; }
+  wrap.style.display = 'block';
+  wrap.innerHTML = `
+    <div style="background:var(--bg);border-radius:8px;padding:10px 12px">
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;font-weight:600">
+        <input type="checkbox" ${univMergeAll ? 'checked' : ''} onchange="univSetMergeAll(this.checked)">
+        Zlúčiť všetky záložky (nájdených: ${univSheets.length})
+      </label>
+      ${!univMergeAll ? `
+        <select onchange="univSetActiveSheet(this.value)" style="margin-top:8px">
+          ${univSheets.map((s,i) => `<option value="${i}" ${i===univActiveSheetIdx?'selected':''}>${esc(s.name)}</option>`).join('')}
+        </select>
+      ` : `<div class="hint" style="margin-top:6px">Rovnaké mapovanie stĺpcov sa použije na všetky záložky (${univSheets.map(s=>esc(s.name)).join(', ')}).</div>`}
+    </div>`;
+}
+
+function univSetMergeAll(checked) {
+  univMergeAll = checked;
+  univRows = univMergeAll ? univSheets[0].rows : univSheets[univActiveSheetIdx].rows;
+  renderUnivSheetPicker();
+  renderUnivColumnMapper();
+}
+
+function univSetActiveSheet(idxStr) {
+  univActiveSheetIdx = parseInt(idxStr) || 0;
+  univRows = univSheets[univActiveSheetIdx].rows;
+  renderUnivColumnMapper();
 }
 
 function univGetColCount() {
@@ -940,7 +1015,7 @@ function univUpdatePreview() {
 }
 
 function univGetStores() {
-  if (!univRows.length) return null;
+  if (!univSheets.length) return null;
   const dataStartNum = parseInt(document.getElementById('univDataStartRow')?.value) || 1;
   const startIdx = dataStartNum - 1;
 
@@ -953,28 +1028,32 @@ function univGetStores() {
   if (!nameCols.length) return null;
 
   const nonEmpty = v => v !== null && v !== undefined && String(v).trim() !== '';
+  const sheetsToUse = univMergeAll ? univSheets : [univSheets[univActiveSheetIdx]];
 
   const stores = [];
-  for (let r = startIdx; r < univRows.length; r++) {
-    const row = univRows[r];
-    if (!row) continue;
-    if (!nonEmpty(row[nameCols[0]])) continue; // primary name column marks a real data row
+  sheetsToUse.forEach(sheet => {
+    const rows = sheet.rows;
+    for (let r = startIdx; r < rows.length; r++) {
+      const row = rows[r];
+      if (!row) continue;
+      if (!nonEmpty(row[nameCols[0]])) continue; // primary name column marks a real data row
 
-    const name = nameCols.map(ci => row[ci]).filter(nonEmpty).map(v => String(v).trim()).join(' – ');
-    const code = codeCols.map(ci => row[ci]).filter(nonEmpty).map(v => String(v).trim()).join(' ');
-    const infoFields = infoCols.map(ci => {
-      const v = row[ci];
-      if (!nonEmpty(v)) return null;
-      return { label: univColRoles[ci].label || univColLetter(ci), value: String(v).trim() };
-    }).filter(Boolean);
-    const components = compCols.map(ci => {
-      const v = row[ci];
-      const count = typeof v === 'number' ? v : (parseFloat(v) || 0);
-      return { label: univColRoles[ci].label || univColLetter(ci), count };
-    });
+      const name = nameCols.map(ci => row[ci]).filter(nonEmpty).map(v => String(v).trim()).join(' – ');
+      const code = codeCols.map(ci => row[ci]).filter(nonEmpty).map(v => String(v).trim()).join(' ');
+      const infoFields = infoCols.map(ci => {
+        const v = row[ci];
+        if (!nonEmpty(v)) return null;
+        return { label: univColRoles[ci].label || univColLetter(ci), value: String(v).trim() };
+      }).filter(Boolean);
+      const components = compCols.map(ci => {
+        const v = row[ci];
+        const count = typeof v === 'number' ? v : (parseFloat(v) || 0);
+        return { label: univColRoles[ci].label || univColLetter(ci), count };
+      });
 
-    stores.push({ id: uid(), code, name, infoFields, components });
-  }
+      stores.push({ id: uid(), code, name, infoFields, components, damaged: false, damageReason: '', damageDescription: '' });
+    }
+  });
   return stores;
 }
 
@@ -985,11 +1064,16 @@ function univGetCompImages() {
 }
 
 function univResetImportState() {
+  univSheets = [];
+  univMergeAll = true;
+  univActiveSheetIdx = 0;
   univRows = [];
   univColRoles = {};
   univCompImages = {};
   const area = document.getElementById('univImportArea');
   if (area) area.style.display = 'none';
+  const picker = document.getElementById('univSheetPicker');
+  if (picker) { picker.style.display = 'none'; picker.innerHTML = ''; }
   const fileInput = document.getElementById('univFileInput');
   if (fileInput) fileInput.value = '';
 }
@@ -1342,6 +1426,7 @@ function renderRolloutStoreList(skipInputSync) {
 const ROLLOUT_STEPS_BASE = [
   { id: 'arrival',   title: 'Príchod',            icon: '📍', type: 'auto' },
   { id: 'contact',   title: 'Kontakt vedúceho',   icon: '🤝', type: 'contact' },
+  { id: 'damage',    title: 'Stav lokality',       icon: '⚠️', type: 'damage' },
   { id: 'photoPred', title: 'Foto PRED',           icon: '📸', type: 'photo', key: 'predPhotos' },
   { id: 'install',   title: 'Inštalácia',          icon: '🔧', type: 'checklist' },
   { id: 'photoPost', title: 'Foto PO',             icon: '📸', type: 'photo', key: 'poPhotos' },
@@ -1352,6 +1437,12 @@ const ROLLOUT_STEPS_BASE = [
 // Dynamic steps based on project settings
 function getRolloutSteps() {
   let steps = ROLLOUT_STEPS_BASE;
+  if (currentRolloutProject?.requireContact === false) {
+    steps = steps.filter(s => s.id !== 'contact');
+  }
+  if (!currentRolloutProject?.trackDamage) {
+    steps = steps.filter(s => s.id !== 'damage');
+  }
   if (currentRolloutProject?.noRapport) {
     steps = steps.filter(s => s.id !== 'rapport');
   }
@@ -1383,7 +1474,10 @@ function startRolloutInstall(storeId) {
     predPhotos: [],
     checksInstall: (currentRolloutStore.components || []).map(c => c.count === 0),
     poPhotos: [], rapportPhotos: [],
-    note: ''
+    note: '',
+    damaged: !!currentRolloutStore.damaged,
+    damageReason: currentRolloutStore.damageReason || '',
+    damageDescription: currentRolloutStore.damageDescription || ''
   };
   // Reset rapport photos if not needed
   if (currentRolloutProject?.noRapport) {
@@ -1465,6 +1559,32 @@ function renderRolloutStepContent() {
       </div>
       <button class="btn btn-primary" id="btnRContact" onclick="nextRolloutStep()" ${rolloutStepData.vedouciMeno ? '' : 'disabled'}>Pokračovať →</button>`;
   }
+  else if (step.type === 'damage') {
+    const reasons = currentRolloutProject.damageReasons?.length ? currentRolloutProject.damageReasons : DEFAULT_DAMAGE_REASONS.split('\n');
+    el.innerHTML = `
+      <div class="card">
+        <div class="step-number">Krok ${i+1} z ${getRolloutSteps().length}</div>
+        <div class="step-title">${step.icon} ${step.title}</div>
+        <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-weight:700;font-size:16px;padding:12px;background:${rolloutStepData.damaged?'var(--accent-l)':'var(--bg)'};border-radius:8px;margin-bottom:12px">
+          <input type="checkbox" ${rolloutStepData.damaged?'checked':''} onchange="rolloutStepData.damaged=this.checked;renderRolloutStepContent()" style="width:20px;height:20px">
+          ⚠️ Poškodená
+        </label>
+        ${rolloutStepData.damaged ? `
+          <div class="fg">
+            <label>Dôvod poškodenia</label>
+            <select onchange="rolloutStepData.damageReason=this.value">
+              <option value="">— Vyber dôvod —</option>
+              ${reasons.map(r => `<option value="${esc(r)}" ${rolloutStepData.damageReason===r?'selected':''}>${esc(r)}</option>`).join('')}
+            </select>
+          </div>
+          <div class="fg">
+            <label>Popis (voliteľné)</label>
+            <textarea rows="3" placeholder="Bližší popis poškodenia..." oninput="rolloutStepData.damageDescription=this.value">${esc(rolloutStepData.damageDescription)}</textarea>
+          </div>
+        ` : ''}
+      </div>
+      <button class="btn btn-primary" onclick="nextRolloutStep()">Pokračovať →</button>`;
+  }
   else if (step.type === 'photo') {
     const photos = rolloutStepData[step.key];
     const isRapport = step.key === 'rapportPhotos';
@@ -1538,7 +1658,7 @@ function renderRolloutStepContent() {
         <p style="color:var(--muted);font-size:14px;margin-bottom:16px">Skontroluj kompletnosť všetkých krokov a dokonči inštaláciu.</p>
         <div class="info-chips">
           <div class="chip"><div class="cl">Predajňa</div><div class="cv">${esc(currentRolloutStore.name)}</div></div>
-          <div class="chip"><div class="cl">Vedúci</div><div class="cv">${esc(rolloutStepData.vedouciMeno)}</div></div>
+          ${rolloutStepData.vedouciMeno ? `<div class="chip"><div class="cl">Vedúci</div><div class="cv">${esc(rolloutStepData.vedouciMeno)}</div></div>` : ''}
         </div>
       </div>
       <div class="card">
@@ -1617,6 +1737,9 @@ async function finishRollout() {
       gps: rolloutGPS ? rolloutGPS.lat + ', ' + rolloutGPS.lng : 'nedostupne',
       note: rolloutStepData.note || '',
       photo_count: rolloutStepData.predPhotos.length + rolloutStepData.poPhotos.length + rolloutStepData.rapportPhotos.length,
+      damaged: rolloutStepData.damaged ? 'ano' : 'nie',
+      damage_reason: rolloutStepData.damaged ? (rolloutStepData.damageReason || '') : '',
+      damage_description: rolloutStepData.damaged ? (rolloutStepData.damageDescription || '') : '',
       pdf_base64: pdfBase64,
       pdf_filename: 'Rollout_' + String(currentRolloutStore.code || currentRolloutStore.name).replace(/[^a-zA-Z0-9]/g,'_') + '_' + fmtDateFile(endTime) + '.pdf'
     });
@@ -1633,9 +1756,30 @@ async function finishRollout() {
       endTime: endTime.toISOString(),
       gps: rolloutGPS,
       photoCount: rolloutStepData.predPhotos.length + rolloutStepData.poPhotos.length + rolloutStepData.rapportPhotos.length,
+      damaged: !!rolloutStepData.damaged,
+      damageReason: rolloutStepData.damaged ? (rolloutStepData.damageReason || '') : '',
+      damageDescription: rolloutStepData.damaged ? (rolloutStepData.damageDescription || '') : '',
       completed: true
     });
     saveLocal(); syncCloud();
+
+    // Persist the damage marking onto the project's store list (for the admin XLS export).
+    // Re-fetch the latest cloud copy first so we don't clobber another technician's
+    // concurrent update to a different store in the same project.
+    if (currentRolloutProject.trackDamage) {
+      try {
+        await loadRolloutCloud();
+        const freshProject = appData.rolloutProjects.find(p => p.id === currentRolloutProject.id);
+        const freshStore = freshProject?.stores?.find(s => s.id === currentRolloutStore.id);
+        if (freshStore) {
+          freshStore.damaged = !!rolloutStepData.damaged;
+          freshStore.damageReason = rolloutStepData.damaged ? (rolloutStepData.damageReason || '') : '';
+          freshStore.damageDescription = rolloutStepData.damaged ? (rolloutStepData.damageDescription || '') : '';
+        }
+        if (freshProject) currentRolloutProject = freshProject;
+        await syncRolloutCloud();
+      } catch (e) { console.warn('Damage sync failed', e); }
+    }
 
     setSending(false);
     document.getElementById('rDoneStore').textContent = currentRolloutStore.name;
@@ -1662,12 +1806,40 @@ async function sendWebhookRollout(payload) {
 // ================================================================
 // ROLLOUT PDF
 // ================================================================
+const LANG_PDF = {
+  sk: {
+    rolloutLabel: 'Rollout',
+    fieldLabels: { Projekt:'Projekt', Predajna:'Predajna', KodPredajne:'Kod predajne', Technik:'Technik', Vedouci:'Vedouci', GPS:'GPS', Prichod:'Prichod', Ukoncenie:'Ukoncenie', Trvanie:'Trvanie', Fotografie:'Fotografie' },
+    minut: 'minut', nedostupne: 'nedostupne', ks: 'ks',
+    komponenty: 'INSTALACIE - KOMPONENTY',
+    info: 'DALSIE INFO',
+    photoPred: 'STAV PRED INSTALÁCIOU', photoPost: 'STAV PO INSTALÁCII', rapport: 'RAPPORT',
+    poznamka: 'POZNAMKA', strana: 'Strana',
+    poskodenaYes: 'POSKODENA', poskodenaNo: 'Bez poskodenia', dovod: 'Dovod', popis: 'Popis'
+  },
+  de: {
+    rolloutLabel: 'Rollout',
+    fieldLabels: { Projekt:'Projekt', Predajna:'Standort', KodPredajne:'Code', Technik:'Techniker', Vedouci:'Standortleiter', GPS:'GPS', Prichod:'Ankunft', Ukoncenie:'Fertigstellung', Trvanie:'Dauer', Fotografie:'Fotos' },
+    minut: 'Minuten', nedostupne: 'nicht verfügbar', ks: 'Stk',
+    komponenty: 'INSTALLATION - KOMPONENTEN',
+    info: 'WEITERE INFOS',
+    photoPred: 'ZUSTAND VOR DER INSTALLATION', photoPost: 'ZUSTAND NACH DER INSTALLATION', rapport: 'RAPPORT',
+    poznamka: 'ANMERKUNG', strana: 'Seite',
+    poskodenaYes: 'BESCHÄDIGT', poskodenaNo: 'Kein Schaden', dovod: 'Ursache', popis: 'Beschreibung'
+  }
+};
+
 async function generateRolloutPDF(endTime) {
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
   const W = 210, M = 14;
   let y = 0;
 
+  const isDE = currentRolloutProject.lang === 'de';
+  const L = LANG_PDF[isDE ? 'de' : 'sk'];
+
+  // Slovak-safe transliteration (jsPDF's core font can't render č/ď/ľ/ň/ŕ/š/ť/ž etc.)
+  // Used for freely-typed text which is assumed Slovak regardless of report language.
   const t = (s) => String(s||'')
     .replace(/č/g,'c').replace(/Č/g,'C')
     .replace(/ď/g,'d').replace(/Ď/g,'D')
@@ -1688,13 +1860,18 @@ async function generateRolloutPDF(endTime) {
     .replace(/ö/g,'o').replace(/Ö/g,'O')
     .replace(/ü/g,'u').replace(/Ü/g,'U');
 
+  // German text (store names/addresses from the AT import) uses ä/ö/ü/ß natively —
+  // those ARE supported by jsPDF's core font, so leave them untouched.
+  const dsafe = (s) => String(s||'');
+  const storeText = (s) => isDE ? dsafe(s) : t(s);
+
   // Header
   doc.setFillColor(20,20,20); doc.rect(0,0,W,22,'F');
   doc.setFillColor(220,30,30); doc.rect(0,22,W,2,'F');
   doc.setTextColor(220,30,30); doc.setFontSize(18); doc.setFont('helvetica','bold');
   doc.text('INSTRACK', M, 15);
   doc.setFontSize(8); doc.setFont('helvetica','normal'); doc.setTextColor(180,180,180);
-  doc.text('Rollout' + (currentRolloutProject.cislo ? ' — ' + t(currentRolloutProject.cislo) : ''), M+42, 15);
+  doc.text(L.rolloutLabel + (currentRolloutProject.cislo ? ' — ' + t(currentRolloutProject.cislo) : ''), M+42, 15);
   doc.setTextColor(255,255,255); doc.text(fmtDateTime(endTime), W-M, 15, {align:'right'});
   y = 30;
 
@@ -1703,13 +1880,14 @@ async function generateRolloutPDF(endTime) {
   doc.setFillColor(252,252,252); doc.setDrawColor(20,20,20); doc.setLineWidth(0.5);
   doc.roundedRect(M, y, W-2*M, 42, 3, 3, 'FD');
   doc.setFillColor(220,30,30); doc.roundedRect(M, y, 3, 42, 1, 1, 'F');
-  const fields = [
-    ['Projekt', t(currentRolloutProject.name)], ['Predajna', t(currentRolloutStore.name)],
-    ['Kod predajne', t(currentRolloutStore.code)], ['Technik', t(currentUser.name)],
-    ['Vedouci', t(rolloutStepData.vedouciMeno)], ['GPS', rolloutGPS ? rolloutGPS.lat+', '+rolloutGPS.lng : 'nedostupne'],
-    ['Prichod', fmtDateTime(rolloutArrivalTime)], ['Ukoncenie', fmtDateTime(endTime)],
-    ['Trvanie', dur+' minut'], ['Fotografie', (rolloutStepData.predPhotos.length+rolloutStepData.poPhotos.length+rolloutStepData.rapportPhotos.length)+' ks']
+  let fields = [
+    [L.fieldLabels.Projekt, t(currentRolloutProject.name)], [L.fieldLabels.Predajna, storeText(currentRolloutStore.name)],
+    [L.fieldLabels.KodPredajne, storeText(currentRolloutStore.code)], [L.fieldLabels.Technik, t(currentUser.name)],
+    [L.fieldLabels.Vedouci, t(rolloutStepData.vedouciMeno)], [L.fieldLabels.GPS, rolloutGPS ? rolloutGPS.lat+', '+rolloutGPS.lng : L.nedostupne],
+    [L.fieldLabels.Prichod, fmtDateTime(rolloutArrivalTime)], [L.fieldLabels.Ukoncenie, fmtDateTime(endTime)],
+    [L.fieldLabels.Trvanie, dur+' '+L.minut], [L.fieldLabels.Fotografie, (rolloutStepData.predPhotos.length+rolloutStepData.poPhotos.length+rolloutStepData.rapportPhotos.length)+' '+L.ks]
   ];
+  fields = fields.filter(f => !(f[0] === L.fieldLabels.Vedouci && !rolloutStepData.vedouciMeno));
   fields.slice(0,6).forEach((f,i) => {
     const col = i%2, row = Math.floor(i/2);
     const xx = M+8+col*88, yy = y+10+row*11;
@@ -1720,16 +1898,51 @@ async function generateRolloutPDF(endTime) {
   });
   y += 50;
 
+  // Damage banner
+  if (currentRolloutProject.trackDamage) {
+    const isDamaged = !!rolloutStepData.damaged;
+    const boxH = isDamaged ? 26 : 12;
+    doc.setFillColor(isDamaged?255:235, isDamaged?235:245, isDamaged?235:235);
+    doc.setDrawColor(isDamaged?220:30, isDamaged?30:140, isDamaged?30:60);
+    doc.setLineWidth(0.6);
+    doc.roundedRect(M, y, W-2*M, boxH, 3, 3, 'FD');
+    doc.setFontSize(9.5); doc.setFont('helvetica','bold');
+    doc.setTextColor(isDamaged?200:30, isDamaged?30:120, isDamaged?30:50);
+    doc.text((isDamaged?'⚠ ':'') + (isDamaged ? L.poskodenaYes : L.poskodenaNo), M+6, y+(isDamaged?8:7.5));
+    if (isDamaged) {
+      doc.setFontSize(8.5); doc.setFont('helvetica','normal'); doc.setTextColor(60,40,40);
+      if (rolloutStepData.damageReason) doc.text(L.dovod + ': ' + t(rolloutStepData.damageReason), M+6, y+15);
+      if (rolloutStepData.damageDescription) {
+        const descLines = doc.splitTextToSize(L.popis + ': ' + t(rolloutStepData.damageDescription), W-2*M-12);
+        doc.text(descLines.slice(0,2), M+6, y+21);
+      }
+    }
+    y += boxH + 6;
+  }
+
+  // Info fields (e.g. Frmt./Tafel/Ston./DriveID from the import)
+  if (currentRolloutStore.infoFields?.length) {
+    doc.setFillColor(20,20,20); doc.rect(M, y, W-2*M, 9, 'F');
+    doc.setFillColor(220,30,30); doc.rect(M, y, 3, 9, 'F');
+    doc.setTextColor(255,255,255); doc.setFontSize(8.5); doc.setFont('helvetica','bold');
+    doc.text(L.info, M+6, y+6); y += 13;
+    doc.setFontSize(9); doc.setFont('helvetica','normal'); doc.setTextColor(30,30,30);
+    currentRolloutStore.infoFields.forEach(f => {
+      doc.text(storeText(f.label) + ': ' + storeText(f.value), M+4, y); y += 6.5;
+    });
+    y += 4;
+  }
+
   // Components
   if (currentRolloutStore.components?.length) {
     doc.setFillColor(20,20,20); doc.rect(M, y, W-2*M, 9, 'F');
     doc.setFillColor(220,30,30); doc.rect(M, y, 3, 9, 'F');
     doc.setTextColor(255,255,255); doc.setFontSize(8.5); doc.setFont('helvetica','bold');
-    doc.text('INSTALACIE - KOMPONENTY', M+6, y+6); y += 13;
+    doc.text(L.komponenty, M+6, y+6); y += 13;
     currentRolloutStore.components.forEach((c,i) => {
       doc.setFontSize(9); doc.setFont('helvetica','normal'); doc.setTextColor(30,30,30);
       const check = rolloutStepData.checksInstall[i] ? '☑' : '☐';
-      doc.text(check + ' ' + t(c.label) + ': ' + c.count + ' ks', M+4, y); y += 7;
+      doc.text(check + ' ' + t(c.label) + ': ' + c.count + ' ' + L.ks, M+4, y); y += 7;
     });
     y += 4;
   }
@@ -1760,9 +1973,9 @@ async function generateRolloutPDF(endTime) {
     if (col>0) y+=rowH+GAP; y+=4;
   };
 
-  await addPhotoSec('STAV PRED INSTALÁCIOU', rolloutStepData.predPhotos);
-  await addPhotoSec('STAV PO INSTALÁCII', rolloutStepData.poPhotos);
-  await addPhotoSec('RAPPORT', rolloutStepData.rapportPhotos);
+  await addPhotoSec(L.photoPred, rolloutStepData.predPhotos);
+  await addPhotoSec(L.photoPost, rolloutStepData.poPhotos);
+  await addPhotoSec(L.rapport, rolloutStepData.rapportPhotos);
 
   // Notes section
   if (rolloutStepData.note) {
@@ -1770,7 +1983,7 @@ async function generateRolloutPDF(endTime) {
     doc.setFillColor(20,20,20); doc.rect(M, y, W-2*M, 9, 'F');
     doc.setFillColor(220,30,30); doc.rect(M, y, 3, 9, 'F');
     doc.setTextColor(255,255,255); doc.setFontSize(8.5); doc.setFont('helvetica','bold');
-    doc.text('POZNAMKA', M+6, y+6); y += 13;
+    doc.text(L.poznamka, M+6, y+6); y += 13;
     doc.setFontSize(9); doc.setFont('helvetica','normal'); doc.setTextColor(30,30,30);
     const noteLines = doc.splitTextToSize(t(rolloutStepData.note), W-2*M-8);
     noteLines.forEach(line => { doc.text(line, M+4, y); y += 6; });
@@ -1782,7 +1995,7 @@ async function generateRolloutPDF(endTime) {
     doc.setPage(p);
     doc.setDrawColor(220,30,30); doc.setLineWidth(1); doc.line(M,289,W-M,289);
     doc.setFontSize(7); doc.setTextColor(150,150,150); doc.setFont('helvetica','normal');
-    doc.text('Strana '+p+' / '+total+'   |   '+t(currentRolloutProject.name)+'   |   '+t(currentRolloutStore.name), W/2, 293, {align:'center'});
+    doc.text(L.strana+' '+p+' / '+total+'   |   '+t(currentRolloutProject.name)+'   |   '+storeText(currentRolloutStore.name), W/2, 293, {align:'center'});
   }
   return doc.output('datauristring').split(',')[1];
 }
@@ -1793,6 +2006,13 @@ async function generateRolloutPDF(endTime) {
 function toggleManualStores() {
   const el = document.getElementById('rProjStoresManual');
   el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
+
+const DEFAULT_DAMAGE_REASONS = 'Roztrhnutá/poškodená fólia\nVyblednuté farby\nGraffiti / Vandalizmus\nChýbajúci komponent\nPoškodená konštrukcia/rám\nZnečistenie\nIné';
+
+function toggleDamageReasonsUI() {
+  const show = document.getElementById('rTrackDamage').checked;
+  document.getElementById('rDamageReasonsWrap').style.display = show ? 'block' : 'none';
 }
 
 function populateTechCheckboxes(existingAllowed) {
@@ -1821,6 +2041,7 @@ function renderRolloutAdminList() {
   el.innerHTML = appData.rolloutProjects.map(p => {
     const done = appData.reports.filter(r => r.rolloutProjectId === p.id && r.completed).length;
     const total = p.stores?.length || 0;
+    const damagedCount = (p.stores||[]).filter(s => s.damaged).length;
     return `
     <div class="proj-item">
       <div class="proj-item-hdr">
@@ -1828,17 +2049,52 @@ function renderRolloutAdminList() {
           <div class="proj-item-name">${esc(p.name)}</div>
           <div class="proj-item-meta">${esc(p.from)} – ${esc(p.to)} &nbsp;|&nbsp; 📬 ${esc(p.email)}</div>
           <div class="proj-item-meta">🏪 ${done}/${total} predajní hotovo</div>
+          ${p.trackDamage ? `<div class="proj-item-meta">⚠️ ${damagedCount} poškodených z ${total}</div>` : ''}
           <div class="proj-item-meta" style="margin-top:4px"><span class="tag ${p.status==='active'?'tag-ok':'tag-warn'}">${p.status==='active'?'Aktívny':'Neaktívny'}</span></div>
         </div>
         <div class="proj-actions" style="flex-direction:column;gap:6px">
           <button class="btn btn-outline btn-sm" onclick="editRolloutProject('${p.id}')">✏️ Upraviť</button>
           <button class="btn btn-outline btn-sm" onclick="toggleRolloutStatus('${p.id}')">${p.status==='active'?'Deaktiv.':'Aktivovať'}</button>
           <button class="btn btn-outline btn-sm" onclick="showResetStoreModal('${p.id}')">🔄 Reset</button>
+          ${p.trackDamage ? `<button class="btn btn-outline btn-sm" onclick="exportDamageXLS('${p.id}')">📤 Export poškodení</button>` : ''}
           <button class="btn-del" onclick="deleteRolloutProject('${p.id}')">✕</button>
         </div>
       </div>
     </div>
   `}).join('');
+}
+
+function exportDamageXLS(projectId) {
+  const p = appData.rolloutProjects.find(pr => pr.id === projectId);
+  if (!p) return;
+  const stores = p.stores || [];
+  if (!stores.length) { showToast('Projekt nemá žiadne predajne/lokality', 'err'); return; }
+
+  // Collect all distinct info-field labels seen across stores (first-seen order)
+  const infoLabels = [];
+  stores.forEach(s => (s.infoFields||[]).forEach(f => { if (!infoLabels.includes(f.label)) infoLabels.push(f.label); }));
+
+  const header = ['Kód', 'Názov', ...infoLabels, 'Poškodená', 'Dôvod poškodenia', 'Popis'];
+  const rows = [header];
+  stores.forEach(s => {
+    const infoMap = {};
+    (s.infoFields||[]).forEach(f => { infoMap[f.label] = f.value; });
+    rows.push([
+      s.code || '',
+      s.name || '',
+      ...infoLabels.map(l => infoMap[l] || ''),
+      s.damaged ? 'X' : '',
+      s.damaged ? (s.damageReason || '') : '',
+      s.damaged ? (s.damageDescription || '') : ''
+    ]);
+  });
+
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Poskodenia');
+  const filename = 'Poskodenia_' + String(p.name || 'rollout').replace(/[^a-zA-Z0-9]/g,'_') + '_' + fmtDateFile(new Date()) + '.xlsx';
+  XLSX.writeFile(wb, filename);
+  showToast('Export stiahnutý ✓', 'ok');
 }
 
 async function saveRolloutProject() {
@@ -1862,7 +2118,7 @@ async function saveRolloutProject() {
     if (txt.trim()) {
       stores = txt.split('\n').filter(Boolean).map(line => {
         const [code, sname] = line.split('|').map(s => s.trim());
-        return { id: uid(), code: code||'', name: sname||code||'', infoFields: [], components: [] };
+        return { id: uid(), code: code||'', name: sname||code||'', infoFields: [], components: [], damaged: false, damageReason: '', damageDescription: '' };
       });
       compImages = [];
     } else {
@@ -1880,12 +2136,16 @@ async function saveRolloutProject() {
 
   const cislo = document.getElementById('rProjCislo').value.trim();
   const noRapport = document.getElementById('rNoRapport').checked;
+  const requireContact = document.getElementById('rRequireContact').checked;
+  const lang = document.getElementById('rProjLang').value;
+  const trackDamage = document.getElementById('rTrackDamage').checked;
+  const damageReasons = document.getElementById('rDamageReasons').value.split('\n').map(s => s.trim()).filter(Boolean);
   const id = existingId;
   if (id) {
     const idx = appData.rolloutProjects.findIndex(p => p.id === id);
-    if (idx >= 0) appData.rolloutProjects[idx] = { ...appData.rolloutProjects[idx], name, from, to, email, cislo, stores, allowedTechs, minFotoPred, minFotoPo, noRapport, compImages };
+    if (idx >= 0) appData.rolloutProjects[idx] = { ...appData.rolloutProjects[idx], name, from, to, email, cislo, stores, allowedTechs, minFotoPred, minFotoPo, noRapport, requireContact, lang, trackDamage, damageReasons, compImages };
   } else {
-    appData.rolloutProjects.push({ id: uid(), name, from, to, email, cislo, stores, allowedTechs, minFotoPred, minFotoPo, noRapport, compImages, status: 'active', createdAt: new Date().toISOString() });
+    appData.rolloutProjects.push({ id: uid(), name, from, to, email, cislo, stores, allowedTechs, minFotoPred, minFotoPo, noRapport, requireContact, lang, trackDamage, damageReasons, compImages, status: 'active', createdAt: new Date().toISOString() });
   }
 
   saveLocal();
@@ -1920,6 +2180,11 @@ function editRolloutProject(id) {
   document.getElementById('rMinFotoPred').value = p.minFotoPred || 1;
   document.getElementById('rMinFotoPo').value = p.minFotoPo || 1;
   document.getElementById('rNoRapport').checked = p.noRapport || false;
+  document.getElementById('rRequireContact').checked = p.requireContact !== false;
+  document.getElementById('rProjLang').value = p.lang || 'sk';
+  document.getElementById('rTrackDamage').checked = !!p.trackDamage;
+  document.getElementById('rDamageReasons').value = (p.damageReasons && p.damageReasons.length) ? p.damageReasons.join('\n') : DEFAULT_DAMAGE_REASONS;
+  toggleDamageReasonsUI();
   document.getElementById('rProjStoresManual').style.display = 'none';
   univResetImportState();
   populateTechCheckboxes(p.allowedTechs || []);
@@ -1935,6 +2200,12 @@ function openNewRolloutModal() {
   document.getElementById('rProjEmail').value = '';
   document.getElementById('rMinFotoPred').value = 1;
   document.getElementById('rMinFotoPo').value = 1;
+  document.getElementById('rNoRapport').checked = false;
+  document.getElementById('rRequireContact').checked = true;
+  document.getElementById('rProjLang').value = 'sk';
+  document.getElementById('rTrackDamage').checked = false;
+  document.getElementById('rDamageReasons').value = DEFAULT_DAMAGE_REASONS;
+  toggleDamageReasonsUI();
   document.getElementById('rProjStoresManual').style.display = 'none';
   univResetImportState();
   populateTechCheckboxes([]);
