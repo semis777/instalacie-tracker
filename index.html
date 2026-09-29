@@ -2114,6 +2114,27 @@ async function saveRolloutProject() {
   let compImages;
   if (stores) {
     compImages = univGetCompImages();
+    // Re-importing (e.g. with a corrected column mapping) generates fresh IDs for every
+    // row. Match new rows back to the existing stores by code (fallback: name) and reuse
+    // their old ID + damage status, so in-progress/completed reports (linked by storeId)
+    // and damage flags don't get silently orphaned.
+    if (existing && existing.stores && existing.stores.length) {
+      const byCode = new Map();
+      const byName = new Map();
+      existing.stores.forEach(es => {
+        if (es.code) byCode.set(String(es.code).trim().toLowerCase(), es);
+        if (es.name) byName.set(String(es.name).trim().toLowerCase(), es);
+      });
+      stores = stores.map(ns => {
+        const codeKey = ns.code ? String(ns.code).trim().toLowerCase() : '';
+        const nameKey = ns.name ? String(ns.name).trim().toLowerCase() : '';
+        const match = (codeKey && byCode.get(codeKey)) || (nameKey && byName.get(nameKey));
+        if (match) {
+          return { ...ns, id: match.id, damaged: match.damaged || false, damageReason: match.damageReason || '', damageDescription: match.damageDescription || '' };
+        }
+        return ns;
+      });
+    }
   } else {
     // Manual input
     const txt = document.getElementById('rProjStoresText')?.value || '';
@@ -2194,7 +2215,7 @@ function editRolloutProject(id) {
   const storeCount = (p.stores || []).length;
   if (storeCount > 0) {
     infoEl.style.display = 'block';
-    infoEl.innerHTML = `📋 Projekt už má naimportovaných <strong>${storeCount} lokalít</strong> z predchádzajúcej tabuľky. Tie ostanú zachované, pokiaľ nižšie nenahráš novú tabuľku (nová tabuľka celý zoznam nahradí).`;
+    infoEl.innerHTML = `📋 Projekt už má naimportovaných <strong>${storeCount} lokalít</strong> z predchádzajúcej tabuľky. Tie ostanú zachované, pokiaľ nižšie nenahráš novú tabuľku. Ak nahráš novú (napr. s iným mapovaním stĺpcov), lokality sa spárujú podľa kódu/názvu — rozrobený/dokončený postup technikov sa nestratí.`;
   } else {
     infoEl.style.display = 'none';
     infoEl.innerHTML = '';
