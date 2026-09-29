@@ -747,6 +747,8 @@ Iné</textarea>
     <div class="divider"></div>
     <div class="card-title">Import predajní/lokalít z XLS</div>
 
+    <div id="rExistingStoresInfo" style="display:none;background:var(--accent-l);border-radius:8px;padding:12px;margin-bottom:12px;font-size:14px"></div>
+
     <label class="import-area">
       <input type="file" id="univFileInput" accept=".xlsx,.xls" onchange="univImportXLS(this)">
       <div class="import-icon">📊</div>
@@ -2186,7 +2188,17 @@ function editRolloutProject(id) {
   document.getElementById('rDamageReasons').value = (p.damageReasons && p.damageReasons.length) ? p.damageReasons.join('\n') : DEFAULT_DAMAGE_REASONS;
   toggleDamageReasonsUI();
   document.getElementById('rProjStoresManual').style.display = 'none';
+  document.getElementById('rProjStoresText').value = '';
   univResetImportState();
+  const infoEl = document.getElementById('rExistingStoresInfo');
+  const storeCount = (p.stores || []).length;
+  if (storeCount > 0) {
+    infoEl.style.display = 'block';
+    infoEl.innerHTML = `📋 Projekt už má naimportovaných <strong>${storeCount} lokalít</strong> z predchádzajúcej tabuľky. Tie ostanú zachované, pokiaľ nižšie nenahráš novú tabuľku (nová tabuľka celý zoznam nahradí).`;
+  } else {
+    infoEl.style.display = 'none';
+    infoEl.innerHTML = '';
+  }
   populateTechCheckboxes(p.allowedTechs || []);
   openModal('mNewRollout');
 }
@@ -2207,7 +2219,11 @@ function openNewRolloutModal() {
   document.getElementById('rDamageReasons').value = DEFAULT_DAMAGE_REASONS;
   toggleDamageReasonsUI();
   document.getElementById('rProjStoresManual').style.display = 'none';
+  document.getElementById('rProjStoresText').value = '';
   univResetImportState();
+  const infoEl = document.getElementById('rExistingStoresInfo');
+  infoEl.style.display = 'none';
+  infoEl.innerHTML = '';
   populateTechCheckboxes([]);
   openModal('mNewRollout');
 }
