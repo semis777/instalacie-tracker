@@ -1219,7 +1219,7 @@ function showScreen(id) {
     _refreshTimer = setInterval(async () => {
       await loadRolloutCloud();
       renderRolloutStoreList();
-    }, 60000); // every 60 seconds only on store list
+    }, 300000); // every 5 min only on store list (keep request volume well under JSONBin's free quota)
   }
   if (id === 'sDash') {
     // Refresh immediately (project deleted/added/deactivated by admin while
@@ -1231,7 +1231,7 @@ function showScreen(id) {
     _refreshTimer = setInterval(async () => {
       await loadRolloutCloud();
       renderDashboard();
-    }, 60000); // keep dashboard in sync every 60 seconds too
+    }, 300000); // keep dashboard in sync every 5 min too
   }
 }
 
