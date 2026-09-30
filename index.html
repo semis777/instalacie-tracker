@@ -524,6 +524,11 @@ textarea{resize:vertical;min-height:80px}
       </div>
     </div>
     <div id="resetStoresList"></div>
+
+    <div class="divider"></div>
+    <div class="card-title">Označiť ako hotové (chýbajúci report)</div>
+    <div class="hint" style="margin-bottom:10px">Použi len keď vieš isto, že predajňa už bola reálne dokončená (napr. máš mail s reportom), ale v appke sa to nesynchronizovalo.</div>
+    <div id="markDoneStoresList"></div>
   </div>
 </div>
 
@@ -1141,6 +1146,18 @@ async function syncCloud() {
     body: JSON.stringify({ technicians: appData.technicians, reports: appData.reports, settings: { emailNovy: appData.settings.emailNovy, adminPwd: appData.settings.adminPwd } })
   });
   if (!res.ok) throw new Error('JSONBin sync failed: ' + res.status);
+}
+
+// Retries syncCloud a few times before giving up — used anywhere a failed sync would
+// silently strand a completed report on just this one device (e.g. finishRollout()).
+async function syncCloudWithRetry(retries = 3, delayMs = 2000) {
+  let lastErr;
+  for (let i = 0; i < retries; i++) {
+    try { await syncCloud(); return true; }
+    catch (e) { lastErr = e; if (i < retries - 1) await new Promise(r => setTimeout(r, delayMs)); }
+  }
+  console.warn('syncCloud failed after retries:', lastErr);
+  return false;
 }
 
 async function syncRolloutCloud() {
@@ -1763,7 +1780,12 @@ async function finishRollout() {
       damageDescription: rolloutStepData.damaged ? (rolloutStepData.damageDescription || '') : '',
       completed: true
     });
-    saveLocal(); syncCloud();
+    saveLocal();
+    setSending(true, 'Ukladám stav do cloudu...');
+    const syncOk = await syncCloudWithRetry();
+    if (!syncOk) {
+      showToast('⚠️ Email odišiel, ale stav sa nepodarilo uložiť do cloudu (slabé pripojenie?). Skús to znova z rovnakej predajne, inak to ostatní neuvidia ako hotové.', 'err');
+    }
 
     // Persist the damage marking onto the project's store list (for the admin XLS export).
     // Re-fetch the latest cloud copy first so we don't clobber another technician's
@@ -2259,12 +2281,11 @@ let _resetProjId = null;
 function showResetStoreModal(projId) {
   const p = appData.rolloutProjects.find(p => p.id === projId);
   if (!p) return;
-  const doneReports = appData.reports.filter(r => r.rolloutProjectId === projId && r.completed);
-  if (!doneReports.length) { showToast('Žiadne hotové predajne na reset', 'err'); return; }
 
   _resetProjId = projId;
   document.getElementById('resetProjName').textContent = p.name;
 
+  const doneReports = appData.reports.filter(r => r.rolloutProjectId === projId && r.completed);
   const list = doneReports.map(r => `
     <div class="card" style="margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;gap:10px">
       <div>
@@ -2274,8 +2295,21 @@ function showResetStoreModal(projId) {
       <button class="btn btn-outline btn-sm" style="flex-shrink:0" onclick="resetStore('${projId}','${r.storeId}')">🔄 Reset</button>
     </div>
   `).join('');
-
   document.getElementById('resetStoresList').innerHTML = list || '<div style="text-align:center;padding:24px;color:var(--muted)">Žiadne hotové predajne.</div>';
+
+  const doneStoreIds = new Set(doneReports.map(r => r.storeId));
+  const notDone = (p.stores || []).filter(s => !doneStoreIds.has(s.id));
+  const markList = notDone.map(s => `
+    <div class="card" style="margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;gap:10px">
+      <div>
+        <div style="font-weight:700;font-size:14px">${esc(s.name)}</div>
+        ${s.code ? `<div style="font-size:12px;color:var(--muted)">Kód: ${esc(s.code)}</div>` : ''}
+      </div>
+      <button class="btn btn-outline btn-sm" style="flex-shrink:0" onclick="markStoreDone('${projId}','${s.id}')">✅ Označiť hotové</button>
+    </div>
+  `).join('');
+  document.getElementById('markDoneStoresList').innerHTML = markList || '<div style="text-align:center;padding:24px;color:var(--muted)">Všetky predajne sú už hotové.</div>';
+
   showScreen('sResetStores');
 }
 
@@ -2292,6 +2326,38 @@ function resetStore(projId, storeId) {
   appData.reports = appData.reports.filter(r => !(r.rolloutProjectId === projId && r.storeId === storeId));
   saveLocal(); syncCloud();
   showToast('Predajňa resetovaná ✓', 'ok');
+  showResetStoreModal(projId);
+}
+
+async function markStoreDone(projId, storeId) {
+  const p = appData.rolloutProjects.find(pr => pr.id === projId);
+  const s = p?.stores?.find(st => st.id === storeId);
+  if (!p || !s) return;
+  if (!confirm(`Naozaj označiť "${s.name}" ako hotovú? Použi to len ak vieš isto, že bola reálne dokončená.`)) return;
+
+  appData.reports.push({
+    id: uid(), type: 'rollout',
+    rolloutProjectId: projId,
+    storeId: s.id,
+    storeName: s.name,
+    storeCode: s.code,
+    projectName: p.name,
+    technik: currentUser?.name || 'Admin (manuálne)',
+    arrivalTime: null,
+    endTime: new Date().toISOString(),
+    gps: null,
+    photoCount: 0,
+    damaged: !!s.damaged,
+    damageReason: s.damageReason || '',
+    damageDescription: s.damageDescription || '',
+    completed: true,
+    manuallyMarked: true
+  });
+  saveLocal();
+  setSending(true, 'Ukladám...');
+  const ok = await syncCloudWithRetry();
+  setSending(false);
+  showToast(ok ? 'Predajňa označená ako hotová ✓' : '⚠️ Uložené lokálne, ale sync zlyhal - skús znova', ok ? 'ok' : 'err');
   showResetStoreModal(projId);
 }
 
