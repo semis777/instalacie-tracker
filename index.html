@@ -1160,7 +1160,16 @@ async function syncCloudWithRetry(retries = 3, delayMs = 2000) {
   return false;
 }
 
+let _rolloutCloudLoadedOk = false;
+
 async function syncRolloutCloud() {
+  // Safety guard: never overwrite the cloud with whatever is in memory unless we know
+  // it started from a successful load in THIS session. Otherwise a failed/blocked load
+  // (403, offline, quota) would leave appData.rolloutProjects at its empty default, and
+  // any save right after that would silently wipe out every real project in the cloud.
+  if (!_rolloutCloudLoadedOk) {
+    throw new Error('Rollout dáta neboli overené oproti cloudu (posledné načítanie zlyhalo) — ukladanie zablokované, aby sa neprepísali existujúce dáta. Obnov stránku (F5) a skús znova.');
+  }
   const binKey = HARDCODED.binKey;
   const binId = HARDCODED.rolloutBinId;
   // Strip component images before saving to cloud (too large)
@@ -1194,6 +1203,7 @@ async function loadRolloutCloud() {
       const j = await r.json();
       // Always overwrite with cloud data (even empty array)
       appData.rolloutProjects = j.record?.rolloutProjects || [];
+      _rolloutCloudLoadedOk = true;
     }
   } catch(e) { console.warn('Rollout cloud load failed', e); }
 }
@@ -2273,7 +2283,7 @@ function openNewRolloutModal() {
 
 function toggleRolloutStatus(id) {
   const p = appData.rolloutProjects.find(p => p.id === id);
-  if (p) { p.status = p.status === 'active' ? 'inactive' : 'active'; saveLocal(); syncRolloutCloud(); renderRolloutAdminList(); renderDashboard(); }
+  if (p) { p.status = p.status === 'active' ? 'inactive' : 'active'; saveLocal(); syncRolloutCloud().catch(e => showToast(e.message, 'err')); renderRolloutAdminList(); renderDashboard(); }
 }
 
 let _resetProjId = null;
@@ -2316,7 +2326,8 @@ function showResetStoreModal(projId) {
 function resetSingleStore(storeId) {
   if (!confirm('Resetovať túto predajňu?')) return;
   appData.reports = appData.reports.filter(r => !(r.rolloutProjectId === currentRolloutProject.id && r.storeId === storeId));
-  saveLocal(); syncRolloutCloud();
+  saveLocal();
+  syncCloud().catch(e => showToast('Reset uložený lokálne, ale sa nepodarilo zosynchronizovať: ' + e.message, 'err'));
   showToast('Predajňa resetovaná ✓', 'ok');
   renderRolloutStoreList();
 }
@@ -2324,7 +2335,8 @@ function resetSingleStore(storeId) {
 function resetStore(projId, storeId) {
   if (!confirm('Resetovať túto predajňu?')) return;
   appData.reports = appData.reports.filter(r => !(r.rolloutProjectId === projId && r.storeId === storeId));
-  saveLocal(); syncCloud();
+  saveLocal();
+  syncCloud().catch(e => showToast('Reset uložený lokálne, ale sa nepodarilo zosynchronizovať: ' + e.message, 'err'));
   showToast('Predajňa resetovaná ✓', 'ok');
   showResetStoreModal(projId);
 }
@@ -2364,7 +2376,7 @@ async function markStoreDone(projId, storeId) {
 function deleteRolloutProject(id) {
   if (!confirm('Vymazať Rollout projekt?')) return;
   appData.rolloutProjects = appData.rolloutProjects.filter(p => p.id !== id);
-  saveLocal(); syncRolloutCloud(); renderRolloutAdminList(); renderDashboard();
+  saveLocal(); syncRolloutCloud().catch(e => showToast(e.message, 'err')); renderRolloutAdminList(); renderDashboard();
   showToast('Projekt vymazaný');
 }
 
