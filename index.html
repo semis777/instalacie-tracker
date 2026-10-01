@@ -1097,7 +1097,9 @@ let rolloutStepData = {
   predPhotos: [],
   checksInstall: [],
   poPhotos: [],
-  rapportPhotos: []
+  rapportPhotos: [],
+  noteOption: '',
+  note: ''
 };
 
 // ================================================================
@@ -1503,7 +1505,7 @@ function startRolloutInstall(storeId) {
     predPhotos: [],
     checksInstall: (currentRolloutStore.components || []).map(c => c.count === 0),
     poPhotos: [], rapportPhotos: [],
-    note: '',
+    noteOption: '', note: '',
     damaged: !!currentRolloutStore.damaged,
     damageReason: currentRolloutStore.damageReason || '',
     damageDescription: currentRolloutStore.damageDescription || ''
@@ -1692,10 +1694,27 @@ function renderRolloutStepContent() {
       </div>
       <div class="card">
         <div class="card-title">Poznámka</div>
-        <textarea id="rolloutNote" rows="3" placeholder="Voliteľná poznámka k inštalácii..." style="width:100%;padding:12px;border:1.5px solid var(--border);border-radius:8px;font-size:15px;font-family:inherit" oninput="rolloutStepData.note=this.value">${rolloutStepData.note||''}</textarea>
+        <select id="rolloutNoteOption" style="width:100%;padding:12px;border:1.5px solid var(--border);border-radius:8px;font-size:15px;font-family:inherit;margin-bottom:${rolloutStepData.noteOption==='Andere'?'10px':'0'}" onchange="onRolloutNoteOptionChange(this.value)">
+          <option value="" ${rolloutStepData.noteOption===''?'selected':''}>-- Vyber možnosť --</option>
+          <option value="PL Im Stand – PL odložený v stojane" ${rolloutStepData.noteOption==='PL Im Stand – PL odložený v stojane'?'selected':''}>PL Im Stand – PL odložený v stojane</option>
+          <option value="PL nicht im Stand – PL nie je odložený v stojane" ${rolloutStepData.noteOption==='PL nicht im Stand – PL nie je odložený v stojane'?'selected':''}>PL nicht im Stand – PL nie je odložený v stojane</option>
+          <option value="Andere" ${rolloutStepData.noteOption==='Andere'?'selected':''}>Andere / Iné</option>
+        </select>
+        ${rolloutStepData.noteOption==='Andere' ? `
+        <textarea id="rolloutNote" rows="3" placeholder="Doplň poznámku..." style="width:100%;padding:12px;border:1.5px solid var(--border);border-radius:8px;font-size:15px;font-family:inherit" oninput="rolloutStepData.note=this.value">${esc(rolloutStepData.note||'')}</textarea>
+        ` : ''}
       </div>
       <button class="btn btn-ok" onclick="finishRollout()">🏁 Dokončiť a odoslať report</button>`;
   }
+}
+
+function onRolloutNoteOptionChange(val) {
+  rolloutStepData.noteOption = val;
+  // For the two fixed options, the note sent in the report IS the chosen label.
+  // For "Andere" we clear it so the technician has to type their own text;
+  // for the empty placeholder we also clear it (nothing chosen = no note).
+  rolloutStepData.note = (val && val !== 'Andere') ? val : '';
+  renderRolloutStepContent();
 }
 
 function validateRolloutContact() {
@@ -2042,7 +2061,7 @@ function toggleManualStores() {
   el.style.display = el.style.display === 'none' ? 'block' : 'none';
 }
 
-const DEFAULT_DAMAGE_REASONS = 'Roztrhnutá/poškodená fólia\nVyblednuté farby\nGraffiti / Vandalizmus\nChýbajúci komponent\nPoškodená konštrukcia/rám\nZnečistenie\nIné';
+const DEFAULT_DAMAGE_REASONS = 'Roztrhnutá/poškodená fólia\nVyblednuté farby\nGraffiti / Vandalizmus\nChýbajúci komponent\nPoškodená konštrukcia/rám\nZnečistenie\nNicht ausgehängt – nevyvesený\nStatisch auf Pos 1- statický na pozícii 1\nStatisch auf Pos 2- statický na pozícii 2\nStatisch auf Pos 3- statický na pozícii 3\nAusgehängt - vyvesený\nIné';
 
 function toggleDamageReasonsUI() {
   const show = document.getElementById('rTrackDamage').checked;
