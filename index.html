@@ -1157,6 +1157,52 @@ function loadLocal() {
   appData.settings.webhookUrl = HARDCODED.webhookUrl;
 }
 
+// ================================================================
+// PENDING REPORTS QUEUE (durability against cloud outages)
+// ================================================================
+// If a completed rollout report fails to sync to the cloud (this is what happened
+// with BA Jirásková and Bardejov during the JSONBin outage), it still lives in this
+// device's localStorage. But the NEXT successful loadCloud() unconditionally replaces
+// appData.reports with whatever the cloud has — silently wiping that locally-saved-
+// but-never-synced report before anyone gets a chance to retry it. This queue keeps a
+// separate copy until it's confirmed synced, and retries it automatically (on app
+// load and periodically) without the technician having to notice a warning or do
+// anything themselves.
+function loadPendingReports() {
+  try { return JSON.parse(localStorage.getItem('instRackPending') || '[]'); }
+  catch(e) { return []; }
+}
+function savePendingReports(arr) {
+  try { localStorage.setItem('instRackPending', JSON.stringify(arr)); }
+  catch(e) { console.warn('savePendingReports failed:', e.message); }
+}
+function addPendingReport(report) {
+  const arr = loadPendingReports();
+  arr.push(report);
+  savePendingReports(arr);
+}
+
+async function flushPendingReports() {
+  const pending = loadPendingReports();
+  if (!pending.length) return;
+  // Re-merge any pending report that a cloud load since it was queued may have
+  // dropped from the in-memory array.
+  let changed = false;
+  pending.forEach(pr => {
+    if (!appData.reports.some(r => r.id === pr.id)) {
+      appData.reports.push(pr);
+      changed = true;
+    }
+  });
+  if (changed) saveLocal();
+  const ok = await syncCloudWithRetry(1, 1000);
+  if (ok) {
+    savePendingReports([]);
+    console.log('Pending reports flushed to cloud:', pending.length);
+  }
+  // On failure, leave the queue intact — the next flush (periodic, or next app load) retries it.
+}
+
 async function syncCloud() {
   const { binKey, binId } = appData.settings;
   if (!binKey || !binId) return;
@@ -1810,7 +1856,7 @@ async function finishRollout() {
       pdf_filename: 'Rollout_' + String(currentRolloutStore.code || currentRolloutStore.name).replace(/[^a-zA-Z0-9]/g,'_') + '_' + fmtDateFile(endTime) + '.pdf'
     });
 
-    appData.reports.push({
+    const newReport = {
       id: uid(), type: 'rollout',
       rolloutProjectId: currentRolloutProject.id,
       storeId: currentRolloutStore.id,
@@ -1826,12 +1872,16 @@ async function finishRollout() {
       damageReason: rolloutStepData.damaged ? (rolloutStepData.damageReason || '') : '',
       damageDescription: rolloutStepData.damaged ? (rolloutStepData.damageDescription || '') : '',
       completed: true
-    });
+    };
+    appData.reports.push(newReport);
     saveLocal();
     setSending(true, 'Ukladám stav do cloudu...');
     const syncOk = await syncCloudWithRetry();
     if (!syncOk) {
-      showToast('⚠️ Email odišiel, ale stav sa nepodarilo uložiť do cloudu (slabé pripojenie?). Skús to znova z rovnakej predajne, inak to ostatní neuvidia ako hotové.', 'err');
+      // Keep this report safe from being wiped by a later cloud load, and keep
+      // retrying it in the background — see flushPendingReports().
+      addPendingReport(newReport);
+      showToast('⚠️ Email odišiel, ale stav sa nepodarilo uložiť do cloudu (slabé pripojenie?). Appka to skúsi doslať automaticky, keď sa pripojenie obnoví.', 'err');
     }
 
     // Persist the damage marking onto the project's store list (for the admin XLS export).
@@ -3062,6 +3112,10 @@ async function init() {
   buildPinGrid();
   await loadCloud();
   await loadRolloutCloud();
+  await flushPendingReports();
+  // Keep retrying any report that's still stuck locally (e.g. queued during a cloud
+  // outage) every 2 minutes, regardless of which screen is open.
+  setInterval(flushPendingReports, 120000);
 }
 
 init();
