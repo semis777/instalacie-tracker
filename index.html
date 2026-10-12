@@ -2386,7 +2386,10 @@ function renderRolloutDetailList() {
             ${report.damaged ? `<div style="font-size:12px;color:var(--err);margin-top:2px">⚠️ Poškodená${report.damageReason ? ': ' + esc(report.damageReason) : ''}</div>` : ''}
           ` : ''}
         </div>
-        <span class="tag ${report ? 'tag-ok' : 'tag-warn'}" style="flex-shrink:0">${report ? '✅ Hotovo' : '⏳ Čaká'}</span>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0">
+          <span class="tag ${report ? 'tag-ok' : 'tag-warn'}">${report ? '✅ Hotovo' : '⏳ Čaká'}</span>
+          ${!report ? `<button class="btn btn-outline btn-sm" onclick="markStoreDone('${p.id}','${store.id}')">✅ Označiť hotové</button>` : ''}
+        </div>
       </div>
     </div>
   `).join('') : '<div style="text-align:center;padding:24px;color:var(--muted)">Žiadne predajne nezodpovedajú filtru.</div>';
@@ -2474,7 +2477,14 @@ async function markStoreDone(projId, storeId) {
   const ok = await syncCloudWithRetry();
   setSending(false);
   showToast(ok ? 'Predajňa označená ako hotová ✓' : '⚠️ Uložené lokálne, ale sync zlyhal - skús znova', ok ? 'ok' : 'err');
-  showResetStoreModal(projId);
+  // Refresh whichever view triggered this (the detail modal, or the older reset screen)
+  // instead of always jumping to the reset screen.
+  const detailModal = document.getElementById('mRolloutDetail');
+  if (detailModal && detailModal.classList.contains('open') && _rolloutDetailProjId === projId) {
+    renderRolloutDetailList();
+  } else {
+    showResetStoreModal(projId);
+  }
 }
 
 function deleteRolloutProject(id) {
