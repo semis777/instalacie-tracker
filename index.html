@@ -795,6 +795,24 @@ Iné</textarea>
   </div>
 </div>
 
+<!-- MODAL: Rollout store detail (admin) -->
+<div class="modal-ov" id="mRolloutDetail">
+  <div class="modal">
+    <div class="modal-title"><span id="rDetailTitle">Detail predajní</span><button class="modal-close" onclick="closeModal('mRolloutDetail')">✕</button></div>
+    <div id="rDetailSummary" style="font-size:14px;color:var(--muted);margin-bottom:12px"></div>
+    <div class="fg">
+      <input type="text" id="rDetailSearch" placeholder="Hľadať podľa názvu alebo kódu..." oninput="renderRolloutDetailList()">
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:14px">
+      <button class="btn btn-outline btn-sm" id="rDetailFilterAll" onclick="setRolloutDetailFilter('all')">Všetky</button>
+      <button class="btn btn-outline btn-sm" id="rDetailFilterDone" onclick="setRolloutDetailFilter('done')">✅ Hotovo</button>
+      <button class="btn btn-outline btn-sm" id="rDetailFilterPending" onclick="setRolloutDetailFilter('pending')">⏳ Čaká</button>
+    </div>
+    <div id="rDetailList"></div>
+    <button class="btn btn-outline mt8" onclick="closeModal('mRolloutDetail')">Zavrieť</button>
+  </div>
+</div>
+
 <!-- MODAL: Confirm leave rollout -->
 <div class="modal-ov" id="mLeaveRollout">
   <div class="modal">
@@ -2107,6 +2125,7 @@ function renderRolloutAdminList() {
         </div>
         <div class="proj-actions" style="flex-direction:column;gap:6px">
           <button class="btn btn-outline btn-sm" onclick="editRolloutProject('${p.id}')">✏️ Upraviť</button>
+          <button class="btn btn-outline btn-sm" onclick="showRolloutDetailModal('${p.id}')">📋 Detail predajní</button>
           <button class="btn btn-outline btn-sm" onclick="toggleRolloutStatus('${p.id}')">${p.status==='active'?'Deaktiv.':'Aktivovať'}</button>
           <button class="btn btn-outline btn-sm" onclick="showResetStoreModal('${p.id}')">🔄 Reset</button>
           ${p.trackDamage ? `<button class="btn btn-outline btn-sm" onclick="exportDamageXLS('${p.id}')">📤 Export poškodení</button>` : ''}
@@ -2306,6 +2325,72 @@ function toggleRolloutStatus(id) {
 }
 
 let _resetProjId = null;
+
+let _rolloutDetailProjId = null;
+let _rolloutDetailFilter = 'all';
+
+function showRolloutDetailModal(projId) {
+  const p = appData.rolloutProjects.find(pr => pr.id === projId);
+  if (!p) return;
+  _rolloutDetailProjId = projId;
+  _rolloutDetailFilter = 'all';
+  document.getElementById('rDetailTitle').textContent = p.name;
+  document.getElementById('rDetailSearch').value = '';
+  renderRolloutDetailList();
+  openModal('mRolloutDetail');
+}
+
+function setRolloutDetailFilter(f) {
+  _rolloutDetailFilter = f;
+  renderRolloutDetailList();
+}
+
+function renderRolloutDetailList() {
+  const p = appData.rolloutProjects.find(pr => pr.id === _rolloutDetailProjId);
+  if (!p) return;
+  const search = (document.getElementById('rDetailSearch').value || '').trim().toLowerCase();
+  const stores = p.stores || [];
+
+  ['All','Done','Pending'].forEach(k => {
+    const btn = document.getElementById('rDetailFilter' + k);
+    const active = _rolloutDetailFilter === k.toLowerCase();
+    btn.style.background = active ? 'var(--accent)' : '';
+    btn.style.color = active ? '#fff' : '';
+    btn.style.borderColor = active ? 'var(--accent)' : '';
+  });
+
+  const rows = stores.map(s => {
+    const report = appData.reports.find(r => r.rolloutProjectId === p.id && r.storeId === s.id && r.completed);
+    return { store: s, report };
+  }).filter(({ store, report }) => {
+    if (_rolloutDetailFilter === 'done' && !report) return false;
+    if (_rolloutDetailFilter === 'pending' && report) return false;
+    if (search) {
+      const hay = (String(store.name||'') + ' ' + String(store.code||'')).toLowerCase();
+      if (!hay.includes(search)) return false;
+    }
+    return true;
+  });
+
+  const doneTotal = stores.filter(s => appData.reports.some(r => r.rolloutProjectId === p.id && r.storeId === s.id && r.completed)).length;
+  document.getElementById('rDetailSummary').textContent = `🏪 ${doneTotal}/${stores.length} predajní hotovo · zobrazených ${rows.length}`;
+
+  document.getElementById('rDetailList').innerHTML = rows.length ? rows.map(({ store, report }) => `
+    <div class="card" style="margin-bottom:8px;padding:12px 14px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
+        <div>
+          <div style="font-weight:700;font-size:14px">${esc(store.name)}</div>
+          ${store.code ? `<div style="font-size:12px;color:var(--muted)">Kód: ${esc(store.code)}</div>` : ''}
+          ${report ? `
+            <div style="font-size:12px;color:var(--muted);margin-top:4px">👤 ${esc(report.technik || '—')} &nbsp;|&nbsp; 🕒 ${fmtDateTime(report.endTime ? new Date(report.endTime) : null)}</div>
+            ${report.damaged ? `<div style="font-size:12px;color:var(--err);margin-top:2px">⚠️ Poškodená${report.damageReason ? ': ' + esc(report.damageReason) : ''}</div>` : ''}
+          ` : ''}
+        </div>
+        <span class="tag ${report ? 'tag-ok' : 'tag-warn'}" style="flex-shrink:0">${report ? '✅ Hotovo' : '⏳ Čaká'}</span>
+      </div>
+    </div>
+  `).join('') : '<div style="text-align:center;padding:24px;color:var(--muted)">Žiadne predajne nezodpovedajú filtru.</div>';
+}
 
 function showResetStoreModal(projId) {
   const p = appData.rolloutProjects.find(p => p.id === projId);
