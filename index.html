@@ -94,19 +94,23 @@ textarea{resize:vertical;min-height:80px}
 .pin-btn.del{font-size:16px;color:var(--muted);-webkit-text-fill-color:var(--muted)}
 
 /* HERO */
-.hero{padding:28px 0 8px;text-align:center}
+.hero{padding:18px 0 4px;text-align:center}
 .hero-icon{width:60px;height:60px;background:var(--accent);border-radius:14px;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;font-size:26px}
 .hero h2{font-size:20px;font-weight:800;margin-bottom:4px}
 .hero p{font-size:13px;color:var(--muted)}
 
 /* PROJECT TILES */
-.proj-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:4px}
-.proj-tile{background:var(--white);border:2px solid var(--border);border-radius:var(--r);padding:18px 14px;cursor:pointer;transition:all .18s;text-align:center}
+.proj-grid{display:grid;grid-template-columns:1fr;gap:10px;margin-top:8px}
+.proj-tile{background:var(--white);border:2px solid var(--border);border-radius:var(--r);padding:14px 16px;cursor:pointer;transition:all .18s;display:flex;align-items:center;gap:14px;text-align:left}
 .proj-tile:hover{border-color:var(--accent);box-shadow:var(--sh)}
 .proj-tile:active{transform:scale(.97)}
-.proj-tile .pt-icon{font-size:32px;margin-bottom:8px}
-.proj-tile .pt-name{font-size:14px;font-weight:700;color:var(--ink)}
-.proj-tile .pt-desc{font-size:11px;color:var(--muted);margin-top:3px}
+.proj-tile .pt-icon{font-size:30px;width:40px;text-align:center;flex:0 0 auto}
+.proj-tile .pt-text{flex:1;min-width:0}
+.proj-tile .pt-arrow{font-size:22px;color:var(--muted);flex:0 0 auto;transition:transform .18s}
+.proj-tile.open{border-color:var(--accent)}
+.proj-tile.open .pt-arrow{transform:rotate(90deg);color:var(--accent)}
+.proj-tile .pt-name{font-size:16px;font-weight:700;color:var(--ink)}
+.proj-tile .pt-desc{font-size:12px;color:var(--muted);margin-top:3px}
 .proj-tile.disabled{opacity:.4;cursor:not-allowed;pointer-events:none}
 
 /* NOVY PROJEKT FORM */
@@ -295,23 +299,28 @@ textarea{resize:vertical;min-height:80px}
 <div class="screen" id="sDash">
   <div class="wrap">
     <div class="hero">
-      <div class="hero-icon">🏠</div>
       <h2 id="dashGreet">Ahoj!</h2>
       <p>Vyber typ zákazky</p>
     </div>
     <div class="proj-grid">
       <div class="proj-tile" onclick="startNovy()">
         <div class="pt-icon">⚡</div>
-        <div class="pt-name">Nová zákazka</div>
-        <div class="pt-desc">Jednorazová inštalácia</div>
+        <div class="pt-text">
+          <div class="pt-name">Nová zákazka</div>
+          <div class="pt-desc">Jednorazová inštalácia</div>
+        </div>
+        <div class="pt-arrow">›</div>
       </div>
       <div class="proj-tile disabled" id="tileRollout">
         <div class="pt-icon">🏪</div>
-        <div class="pt-name">Rollout</div>
-        <div class="pt-desc">Sieť predajní</div>
+        <div class="pt-text">
+          <div class="pt-name">Rollout</div>
+          <div class="pt-desc">Sieť predajní</div>
+        </div>
+        <div class="pt-arrow" id="rolloutArrow">›</div>
       </div>
     </div>
-    <div class="card mt16" id="rolloutList" style="display:none">
+    <div class="card" id="rolloutList" style="display:none;margin-top:12px">
       <div class="card-title">Aktívne Rollouty</div>
       <div id="rolloutItems"></div>
     </div>
@@ -1328,6 +1337,9 @@ function showScreen(id) {
     }, 300000); // every 5 min only on store list (keep request volume well under JSONBin's free quota)
   }
   if (id === 'sDash') {
+    // pri každom príchode na dashboard je zoznam rolloutov zbalený
+    const _rl = document.getElementById('rolloutList'); if (_rl) _rl.style.display = 'none';
+    const _rt = document.getElementById('tileRollout'); if (_rt) _rt.classList.remove('open');
     // Refresh immediately (project deleted/added/deactivated by admin while
     // this technician was already logged in wouldn't otherwise show up)
     (async () => {
@@ -1438,19 +1450,24 @@ function renderDashboard() {
   const rollouts = appData.rolloutProjects.filter(p => p.status === 'active');
   const tile = document.getElementById('tileRollout');
   const list = document.getElementById('rolloutList');
-  const items = document.getElementById('rolloutItems');
 
   if (rollouts.length > 0) {
+    if (list.style.display !== 'none') renderRolloutList(); // zachová rozbalený stav po obnovení dát
     tile.classList.remove('disabled');
     tile.onclick = () => {
-      if (rollouts.length === 1) selectRolloutProject(rollouts[0].id);
-      else { list.style.display = 'block'; renderRolloutList(); }
+      const open = list.style.display === 'none';
+      list.style.display = open ? 'block' : 'none';
+      tile.classList.toggle('open', open);
+      if (open) {
+        renderRolloutList();
+        setTimeout(() => list.scrollIntoView({behavior:'smooth', block:'nearest'}), 50);
+      }
     };
-    list.style.display = 'block';
-    renderRolloutList();
   } else {
     tile.classList.add('disabled');
+    tile.classList.remove('open');
     list.style.display = 'none';
+    tile.onclick = null;
   }
 }
 
