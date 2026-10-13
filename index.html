@@ -641,6 +641,15 @@ textarea{resize:vertical;min-height:80px}
         <button class="btn btn-dark btn-sm" onclick="saveSettings()">Uložiť</button>
       </div>
       <div class="card mt16">
+        <div class="card-title">Hlavný PIN pre Nastavenia</div>
+        <div class="fg">
+          <label>Nový hlavný PIN (4–8 číslic)</label>
+          <input type="password" id="setNewSettingsPin" inputmode="numeric" pattern="[0-9]*" maxlength="8" placeholder="Nový PIN" autocomplete="off">
+          <div class="hint">Tento PIN sa vyžaduje pri každom otvorení záložky Nastavenia</div>
+        </div>
+        <button class="btn btn-outline btn-sm" onclick="changeSettingsPin()">Zmeniť PIN</button>
+      </div>
+      <div class="card mt16">
         <div class="card-title">Admin heslo</div>
         <div class="fg">
           <label>Nové heslo</label>
@@ -673,6 +682,24 @@ textarea{resize:vertical;min-height:80px}
     </div>
     <button class="btn btn-primary" onclick="saveTech()">Uložiť technika</button>
     <button class="btn btn-outline mt8" onclick="closeModal('mAddTech')">Zrušiť</button>
+  </div>
+</div>
+
+<!-- MODAL: PIN pre Nastavenia -->
+<div class="modal-ov" id="mSettingsPin">
+  <div class="modal">
+    <div class="modal-title"><span id="spTitle">PIN pre Nastavenia</span><button class="modal-close" onclick="closeModal('mSettingsPin')">✕</button></div>
+    <p id="spInfo" style="color:var(--muted);font-size:14px;margin-bottom:16px">Nastavenia sú chránené. Zadaj hlavný PIN.</p>
+    <div class="fg">
+      <label id="spLabel">Hlavný PIN</label>
+      <input type="password" id="spPin" inputmode="numeric" pattern="[0-9]*" maxlength="8" autocomplete="off" onkeydown="if(event.key==='Enter')submitSettingsPin()">
+    </div>
+    <div class="fg" id="spConfirmWrap" style="display:none">
+      <label>Zopakuj PIN</label>
+      <input type="password" id="spPin2" inputmode="numeric" pattern="[0-9]*" maxlength="8" autocomplete="off" onkeydown="if(event.key==='Enter')submitSettingsPin()">
+    </div>
+    <button class="btn btn-primary" onclick="submitSettingsPin()">Potvrdiť</button>
+    <button class="btn btn-outline mt8" onclick="closeModal('mSettingsPin')">Zrušiť</button>
   </div>
 </div>
 
@@ -1156,7 +1183,8 @@ function saveLocal() {
       reports: appData.reports,
       settings: {
         adminPwd: appData.settings.adminPwd,
-        emailNovy: appData.settings.emailNovy
+        emailNovy: appData.settings.emailNovy,
+        settingsPinHash: appData.settings.settingsPinHash || ''
       }
     };
     localStorage.setItem('instRackV3', JSON.stringify(d));
@@ -1234,7 +1262,7 @@ async function syncCloud() {
   const res = await fetch(`https://api.jsonbin.io/v3/b/${binId}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', 'X-Master-Key': binKey },
-    body: JSON.stringify({ technicians: appData.technicians, reports: appData.reports, settings: { emailNovy: appData.settings.emailNovy, adminPwd: appData.settings.adminPwd } })
+    body: JSON.stringify({ technicians: appData.technicians, reports: appData.reports, settings: { emailNovy: appData.settings.emailNovy, adminPwd: appData.settings.adminPwd, settingsPinHash: appData.settings.settingsPinHash || '' } })
   });
   if (!res.ok) throw new Error('JSONBin sync failed: ' + res.status);
 }
@@ -1314,6 +1342,7 @@ async function loadCloud() {
         if (j.record.settings) {
           appData.settings.emailNovy = j.record.settings.emailNovy || appData.settings.emailNovy;
           appData.settings.adminPwd = j.record.settings.adminPwd || appData.settings.adminPwd;
+          appData.settings.settingsPinHash = j.record.settings.settingsPinHash || appData.settings.settingsPinHash || '';
         }
         saveLocal();
       }
@@ -1327,6 +1356,17 @@ async function loadCloud() {
 let _refreshTimer = null;
 
 function showScreen(id) {
+  if (id !== 'sAdmin') {
+    _settingsUnlocked = false;
+    // ak boli Nastavenia otvorené, po odchode z adminu sa záložka vráti na Technici
+    const _ts = document.getElementById('tSettings');
+    if (_ts && _ts.classList.contains('active')) {
+      _ts.classList.remove('active');
+      document.querySelectorAll('.atab').forEach(b => b.classList.remove('active'));
+      document.getElementById('tTech').classList.add('active');
+      const _tb = document.querySelector(".atab[onclick*='tTech']"); if (_tb) _tb.classList.add('active');
+    }
+  }
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   // Tlačidlo Admin v hlavičke: skryté na samotnom Admin paneli (tam je zbytočné) a pre technikov
   const _ab = document.getElementById('hdrAdminBtn');
@@ -2967,6 +3007,9 @@ function doAdminLogin() {
 }
 
 async function switchTab(id, btn) {
+  // Záložka Nastavenia je chránená hlavným PIN-om
+  if (id === 'tSettings' && !_settingsUnlocked) { openSettingsPinModal(btn); return; }
+  if (id !== 'tSettings') _settingsUnlocked = false;
   document.querySelectorAll('.asec').forEach(s => s.classList.remove('active'));
   document.querySelectorAll('.atab').forEach(b => b.classList.remove('active'));
   document.getElementById(id).classList.add('active');
@@ -3085,6 +3128,73 @@ function clearAllReports() {
   syncCloud();
   renderReports();
   showToast('Všetky reporty vymazané');
+}
+
+// SETTINGS PIN LOCK
+let _settingsUnlocked = false;
+let _spBtn = null;
+let _spMode = 'verify';
+
+async function hashPin(pin) {
+  const str = 'instrack|' + pin;
+  try {
+    const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+    return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+  } catch (e) {
+    let h = 5381; for (let i = 0; i < str.length; i++) h = ((h << 5) + h + str.charCodeAt(i)) >>> 0;
+    return 'x' + h.toString(16);
+  }
+}
+
+async function openSettingsPinModal(btn) {
+  _spBtn = btn || document.querySelector(".atab[onclick*='tSettings']");
+  await loadCloud(); // aktuálny stav z cloudu (aby sa PIN nenastavoval znova)
+  _spMode = appData.settings.settingsPinHash ? 'verify' : 'setup';
+  document.getElementById('spPin').value = '';
+  document.getElementById('spPin2').value = '';
+  const setup = _spMode === 'setup';
+  document.getElementById('spTitle').textContent = setup ? 'Nastav hlavný PIN' : 'Nastavenia sú chránené';
+  document.getElementById('spInfo').textContent = setup
+    ? 'Zatiaľ nie je nastavený hlavný PIN. Vyber si 4–8 číslic. Bude sa vyžadovať pri každom otvorení záložky Nastavenia.'
+    : 'Zadaj hlavný PIN.';
+  document.getElementById('spLabel').textContent = setup ? 'Nový hlavný PIN' : 'Hlavný PIN';
+  document.getElementById('spConfirmWrap').style.display = setup ? 'block' : 'none';
+  openModal('mSettingsPin');
+  setTimeout(() => document.getElementById('spPin').focus(), 150);
+}
+
+async function submitSettingsPin() {
+  const pin = document.getElementById('spPin').value.trim();
+  if (_spMode === 'setup') {
+    const pin2 = document.getElementById('spPin2').value.trim();
+    if (!/^[0-9]{4,8}$/.test(pin)) { showToast('PIN musí mať 4–8 číslic', 'err'); return; }
+    if (pin !== pin2) { showToast('PIN-y sa nezhodujú', 'err'); return; }
+    appData.settings.settingsPinHash = await hashPin(pin);
+    saveLocal();
+    try { await syncCloudWithRetry(); } catch (e) { showToast('PIN sa nepodarilo uložiť do cloudu', 'err'); return; }
+    showToast('Hlavný PIN nastavený ✓', 'ok');
+  } else {
+    if (!pin) { showToast('Zadaj PIN', 'err'); return; }
+    if ((await hashPin(pin)) !== appData.settings.settingsPinHash) {
+      document.getElementById('spPin').value = '';
+      showToast('Nesprávny PIN', 'err');
+      return;
+    }
+  }
+  _settingsUnlocked = true;
+  closeModal('mSettingsPin');
+  switchTab('tSettings', _spBtn);
+}
+
+async function changeSettingsPin() {
+  const el = document.getElementById('setNewSettingsPin');
+  const pin = el.value.trim();
+  if (!/^[0-9]{4,8}$/.test(pin)) { showToast('PIN musí mať 4–8 číslic', 'err'); return; }
+  appData.settings.settingsPinHash = await hashPin(pin);
+  saveLocal();
+  try { await syncCloudWithRetry(); } catch (e) { showToast('PIN sa nepodarilo uložiť do cloudu', 'err'); return; }
+  el.value = '';
+  showToast('Hlavný PIN zmenený ✓', 'ok');
 }
 
 // SETTINGS
