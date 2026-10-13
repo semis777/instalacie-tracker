@@ -107,6 +107,8 @@ textarea{resize:vertical;min-height:80px}
 .proj-tile .pt-icon{font-size:30px;width:40px;text-align:center;flex:0 0 auto}
 .proj-tile .pt-text{flex:1;min-width:0}
 .proj-tile .pt-arrow{font-size:22px;color:var(--muted);flex:0 0 auto;transition:transform .18s}
+.proj-tile .pt-badge{flex:0 0 auto;min-width:28px;height:28px;padding:0 9px;border-radius:14px;background:var(--accent);color:#fff;-webkit-text-fill-color:#fff;font-size:14px;font-weight:800;display:flex;align-items:center;justify-content:center}
+.proj-tile .pt-arrow{margin-left:-4px}
 .proj-tile.open{border-color:var(--accent)}
 .proj-tile.open .pt-arrow{transform:rotate(90deg);color:var(--accent)}
 .proj-tile .pt-name{font-size:16px;font-weight:700;color:var(--ink)}
@@ -115,7 +117,7 @@ textarea{resize:vertical;min-height:80px}
 
 /* NOVY PROJEKT FORM */
 .step-header{display:flex;align-items:center;gap:12px;margin:16px 0 20px}
-.step-header button{background:none;border:none;font-size:22px;cursor:pointer;padding:0}
+.step-header button{background:none;border:none;cursor:pointer;padding:6px 8px 6px 0;color:var(--accent);display:flex;align-items:center;justify-content:center;-webkit-appearance:none;appearance:none;touch-action:manipulation}
 .step-header-info .label{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:700}
 .step-header-info .value{font-size:18px;font-weight:800}
 
@@ -317,6 +319,7 @@ textarea{resize:vertical;min-height:80px}
           <div class="pt-name">Rollout</div>
           <div class="pt-desc">Sieť predajní</div>
         </div>
+        <div class="pt-badge" id="rolloutCount" style="display:none">0</div>
         <div class="pt-arrow" id="rolloutArrow">›</div>
       </div>
     </div>
@@ -333,7 +336,7 @@ textarea{resize:vertical;min-height:80px}
 <div class="screen" id="sNovy">
   <div class="wrap">
     <div class="step-header">
-      <button onclick="confirmLeaveNovy()">←</button>
+      <button onclick="confirmLeaveNovy()"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#cc0213" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12H5M11 5l-7 7 7 7"/></svg></button>
       <div class="step-header-info">
         <div class="label">Nová zákazka</div>
         <div class="value">Inštalácia</div>
@@ -457,7 +460,7 @@ textarea{resize:vertical;min-height:80px}
 <div class="screen" id="sRolloutStores">
   <div class="wrap">
     <div class="step-header">
-      <button onclick="showScreen('sDash')">←</button>
+      <button onclick="showScreen('sDash')"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#cc0213" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12H5M11 5l-7 7 7 7"/></svg></button>
       <div class="step-header-info">
         <div class="label">Rollout</div>
         <div class="value" id="rolloutProjName">–</div>
@@ -486,7 +489,7 @@ textarea{resize:vertical;min-height:80px}
 <div class="screen" id="sRolloutInstall">
   <div class="wrap">
     <div class="step-header">
-      <button onclick="confirmLeaveRollout()">←</button>
+      <button onclick="confirmLeaveRollout()"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#cc0213" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12H5M11 5l-7 7 7 7"/></svg></button>
       <div class="step-header-info">
         <div class="label" id="rInstallProjLabel">Rollout</div>
         <div class="value" id="rInstallStoreName">–</div>
@@ -539,7 +542,7 @@ textarea{resize:vertical;min-height:80px}
 <div class="screen" id="sResetStores" style="overflow-y:auto;height:calc(100vh - 48px)">
   <div class="wrap">
     <div class="step-header">
-      <button onclick="showScreen('sAdmin')">←</button>
+      <button onclick="showScreen('sAdmin')"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#cc0213" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12H5M11 5l-7 7 7 7"/></svg></button>
       <div class="step-header-info">
         <div class="label">Reset predajní</div>
         <div class="value" id="resetProjName">–</div>
@@ -1450,6 +1453,9 @@ function renderDashboard() {
   const rollouts = appData.rolloutProjects.filter(p => p.status === 'active');
   const tile = document.getElementById('tileRollout');
   const list = document.getElementById('rolloutList');
+  const badge = document.getElementById('rolloutCount');
+  badge.textContent = rollouts.length;
+  badge.style.display = rollouts.length ? 'flex' : 'none';
 
   if (rollouts.length > 0) {
     if (list.style.display !== 'none') renderRolloutList(); // zachová rozbalený stav po obnovení dát
