@@ -1328,6 +1328,9 @@ let _refreshTimer = null;
 
 function showScreen(id) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  // Tlačidlo Admin v hlavičke: skryté na samotnom Admin paneli (tam je zbytočné) a pre technikov
+  const _ab = document.getElementById('hdrAdminBtn');
+  if (_ab) _ab.style.display = (id === 'sAdmin' || (currentUser && !currentUser.isAdmin)) ? 'none' : 'block';
   document.getElementById(id).classList.add('active');
   window.scrollTo(0, 0);
 
