@@ -800,6 +800,17 @@ Poškodená konštrukcia/rám
 Znečistenie
 Iné</textarea>
     </div>
+    <div class="fg">
+      <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-weight:600">
+        <input type="checkbox" id="rTrackStatus" onchange="toggleStatusOptionsUI()" style="width:18px;height:18px">
+        Sledovať status lokality (AT rollout)
+      </label>
+      <div class="hint">V kroku "Stav lokality" pridá povinný výber Status + stĺpec Status v XLS exporte</div>
+    </div>
+    <div class="fg" id="rStatusOptionsWrap" style="display:none">
+      <label>Statusy (každý na samostatný riadok)</label>
+      <textarea id="rStatusOptions" rows="6"></textarea>
+    </div>
 
     <div class="divider"></div>
     <div class="card-title">Import predajní/lokalít z XLS</div>
@@ -1614,7 +1625,7 @@ function getRolloutSteps() {
   if (currentRolloutProject?.requireContact === false) {
     steps = steps.filter(s => s.id !== 'contact');
   }
-  if (!currentRolloutProject?.trackDamage) {
+  if (!currentRolloutProject?.trackDamage && !currentRolloutProject?.trackStatus) {
     steps = steps.filter(s => s.id !== 'damage');
   }
   if (currentRolloutProject?.noRapport) {
@@ -1651,7 +1662,8 @@ function startRolloutInstall(storeId) {
     noteOption: '', note: '',
     damaged: !!currentRolloutStore.damaged,
     damageReason: currentRolloutStore.damageReason || '',
-    damageDescription: currentRolloutStore.damageDescription || ''
+    damageDescription: currentRolloutStore.damageDescription || '',
+    status: currentRolloutStore.status || ''
   };
   // Reset rapport photos if not needed
   if (currentRolloutProject?.noRapport) {
@@ -1735,11 +1747,23 @@ function renderRolloutStepContent() {
   }
   else if (step.type === 'damage') {
     const reasons = currentRolloutProject.damageReasons?.length ? currentRolloutProject.damageReasons : DEFAULT_DAMAGE_REASONS.split('\n');
+    const useStatus = !!currentRolloutProject.trackStatus;
+    const useDamage = !!currentRolloutProject.trackDamage;
+    const statusOpts = currentRolloutProject.statusOptions?.length ? currentRolloutProject.statusOptions : DEFAULT_STATUS_OPTIONS.split('\n');
     el.innerHTML = `
       <div class="card">
         <div class="step-number">Krok ${i+1} z ${getRolloutSteps().length}</div>
         <div class="step-title">${step.icon} ${step.title}</div>
-        <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-weight:700;font-size:16px;padding:12px;background:${rolloutStepData.damaged?'var(--accent-l)':'var(--bg)'};border-radius:8px;margin-bottom:12px">
+        ${useStatus ? `
+          <div class="fg">
+            <label>Status</label>
+            <select onchange="rolloutStepData.status=this.value;renderRolloutStepContent()">
+              <option value="">— Vyber status —</option>
+              ${statusOpts.map(o => `<option value="${esc(o)}" ${rolloutStepData.status===o?'selected':''}>${esc(o)}</option>`).join('')}
+            </select>
+          </div>
+        ` : ''}
+        ${useDamage ? `<label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-weight:700;font-size:16px;padding:12px;background:${rolloutStepData.damaged?'var(--accent-l)':'var(--bg)'};border-radius:8px;margin-bottom:12px">
           <input type="checkbox" ${rolloutStepData.damaged?'checked':''} onchange="rolloutStepData.damaged=this.checked;renderRolloutStepContent()" style="width:20px;height:20px">
           ⚠️ Poškodená
         </label>
@@ -1755,9 +1779,9 @@ function renderRolloutStepContent() {
             <label>Popis (voliteľné)</label>
             <textarea rows="3" placeholder="Bližší popis poškodenia..." oninput="rolloutStepData.damageDescription=this.value">${esc(rolloutStepData.damageDescription)}</textarea>
           </div>
-        ` : ''}
+        ` : ''}` : ''}
       </div>
-      <button class="btn btn-primary" onclick="nextRolloutStep()">Pokračovať →</button>`;
+      <button class="btn btn-primary" onclick="nextRolloutStep()" ${useStatus && !rolloutStepData.status ? 'disabled' : ''}>Pokračovať →</button>`;
   }
   else if (step.type === 'photo') {
     const photos = rolloutStepData[step.key];
@@ -1931,6 +1955,7 @@ async function finishRollout() {
       damaged: rolloutStepData.damaged ? 'ano' : 'nie',
       damage_reason: rolloutStepData.damaged ? (rolloutStepData.damageReason || '') : '',
       damage_description: rolloutStepData.damaged ? (rolloutStepData.damageDescription || '') : '',
+      status: currentRolloutProject.trackStatus ? (rolloutStepData.status || '') : '',
       pdf_base64: pdfBase64,
       pdf_filename: 'Rollout_' + String(currentRolloutStore.code || currentRolloutStore.name).replace(/[^a-zA-Z0-9]/g,'_') + '_' + fmtDateFile(endTime) + '.pdf'
     });
@@ -1950,6 +1975,7 @@ async function finishRollout() {
       damaged: !!rolloutStepData.damaged,
       damageReason: rolloutStepData.damaged ? (rolloutStepData.damageReason || '') : '',
       damageDescription: rolloutStepData.damaged ? (rolloutStepData.damageDescription || '') : '',
+      status: currentRolloutProject.trackStatus ? (rolloutStepData.status || '') : '',
       completed: true
     };
     appData.reports.push(newReport);
@@ -1966,12 +1992,15 @@ async function finishRollout() {
     // Persist the damage marking onto the project's store list (for the admin XLS export).
     // Re-fetch the latest cloud copy first so we don't clobber another technician's
     // concurrent update to a different store in the same project.
-    if (currentRolloutProject.trackDamage) {
+    if (currentRolloutProject.trackDamage || currentRolloutProject.trackStatus) {
       try {
         await loadRolloutCloud();
         const freshProject = appData.rolloutProjects.find(p => p.id === currentRolloutProject.id);
         const freshStore = freshProject?.stores?.find(s => s.id === currentRolloutStore.id);
-        if (freshStore) {
+        if (freshStore && currentRolloutProject.trackStatus) {
+          freshStore.status = rolloutStepData.status || '';
+        }
+        if (freshStore && currentRolloutProject.trackDamage) {
           freshStore.damaged = !!rolloutStepData.damaged;
           freshStore.damageReason = rolloutStepData.damaged ? (rolloutStepData.damageReason || '') : '';
           freshStore.damageDescription = rolloutStepData.damaged ? (rolloutStepData.damageDescription || '') : '';
@@ -2015,7 +2044,7 @@ const LANG_PDF = {
     info: 'DALSIE INFO',
     photoPred: 'STAV PRED INSTALÁCIOU', photoPost: 'STAV PO INSTALÁCII', rapport: 'RAPPORT',
     poznamka: 'POZNAMKA', strana: 'Strana',
-    poskodenaYes: 'POSKODENA', poskodenaNo: 'Bez poskodenia', dovod: 'Dovod', popis: 'Popis'
+    poskodenaYes: 'POSKODENA', poskodenaNo: 'Bez poskodenia', dovod: 'Dovod', popis: 'Popis', status: 'Status'
   },
   de: {
     rolloutLabel: 'Rollout',
@@ -2025,7 +2054,7 @@ const LANG_PDF = {
     info: 'WEITERE INFOS',
     photoPred: 'ZUSTAND VOR DER INSTALLATION', photoPost: 'ZUSTAND NACH DER INSTALLATION', rapport: 'RAPPORT',
     poznamka: 'ANMERKUNG', strana: 'Seite',
-    poskodenaYes: 'BESCHÄDIGT', poskodenaNo: 'Kein Schaden', dovod: 'Ursache', popis: 'Beschreibung'
+    poskodenaYes: 'BESCHÄDIGT', poskodenaNo: 'Kein Schaden', dovod: 'Ursache', popis: 'Beschreibung', status: 'Status'
   }
 };
 
@@ -2097,6 +2126,17 @@ async function generateRolloutPDF(endTime) {
     doc.text(f[1], xx, yy+5);
   });
   y += 50;
+
+  // Status banner
+  if (currentRolloutProject.trackStatus && rolloutStepData.status) {
+    doc.setFillColor(240,240,240);
+    doc.setDrawColor(60,60,60);
+    doc.setLineWidth(0.6);
+    doc.roundedRect(M, y, W-2*M, 12, 3, 3, 'FD');
+    doc.setFontSize(9.5); doc.setFont('helvetica','bold'); doc.setTextColor(30,30,30);
+    doc.text(L.status + ': ' + t(rolloutStepData.status), M+6, y+7.5);
+    y += 12 + 6;
+  }
 
   // Damage banner
   if (currentRolloutProject.trackDamage) {
@@ -2208,7 +2248,14 @@ function toggleManualStores() {
   el.style.display = el.style.display === 'none' ? 'block' : 'none';
 }
 
-const DEFAULT_DAMAGE_REASONS = 'Roztrhnutá/poškodená fólia\nVyblednuté farby\nGraffiti / Vandalizmus\nChýbajúci komponent\nPoškodená konštrukcia/rám\nZnečistenie\nNicht ausgehängt – nevyvesený\nStatisch auf Pos 1- statický na pozícii 1\nStatisch auf Pos 2- statický na pozícii 2\nStatisch auf Pos 3- statický na pozícii 3\nAusgehängt - vyvesený\nIné';
+const DEFAULT_DAMAGE_REASONS = 'Roztrhnutá/poškodená fólia\nVyblednuté farby\nGraffiti / Vandalizmus\nChýbajúci komponent\nPoškodená konštrukcia/rám\nZnečistenie\nIné';
+
+const DEFAULT_STATUS_OPTIONS = 'Nicht ausgehängt – nevyvesený\nStatisch auf Pos 1- statický na pozícii 1\nStatisch auf Pos 2- statický na pozícii 2\nStatisch auf Pos 3- statický na pozícii 3\nAusgehängt - vyvesený';
+
+function toggleStatusOptionsUI() {
+  const show = document.getElementById('rTrackStatus').checked;
+  document.getElementById('rStatusOptionsWrap').style.display = show ? 'block' : 'none';
+}
 
 function toggleDamageReasonsUI() {
   const show = document.getElementById('rTrackDamage').checked;
@@ -2257,7 +2304,7 @@ function renderRolloutAdminList() {
           <button class="btn btn-outline btn-sm" onclick="showRolloutDetailModal('${p.id}')">📋 Detail predajní</button>
           <button class="btn btn-outline btn-sm" onclick="toggleRolloutStatus('${p.id}')">${p.status==='active'?'Deaktiv.':'Aktivovať'}</button>
           <button class="btn btn-outline btn-sm" onclick="showResetStoreModal('${p.id}')">🔄 Reset</button>
-          ${p.trackDamage ? `<button class="btn btn-outline btn-sm" onclick="exportDamageXLS('${p.id}')">📤 Export poškodení</button>` : ''}
+          ${(p.trackDamage || p.trackStatus) ? `<button class="btn btn-outline btn-sm" onclick="exportDamageXLS('${p.id}')">📤 Export ${p.trackDamage ? 'poškodení' : 'statusov'}</button>` : ''}
           <button class="btn-del" onclick="deleteRolloutProject('${p.id}')">✕</button>
         </div>
       </div>
@@ -2275,7 +2322,9 @@ function exportDamageXLS(projectId) {
   const infoLabels = [];
   stores.forEach(s => (s.infoFields||[]).forEach(f => { if (!infoLabels.includes(f.label)) infoLabels.push(f.label); }));
 
-  const header = ['Kód', 'Názov', ...infoLabels, 'Poškodená', 'Dôvod poškodenia', 'Popis'];
+  const header = ['Kód', 'Názov', ...infoLabels,
+    ...(p.trackStatus ? ['Status'] : []),
+    ...(p.trackDamage ? ['Poškodená', 'Dôvod poškodenia', 'Popis'] : [])];
   const rows = [header];
   stores.forEach(s => {
     const infoMap = {};
@@ -2284,9 +2333,12 @@ function exportDamageXLS(projectId) {
       s.code || '',
       s.name || '',
       ...infoLabels.map(l => infoMap[l] || ''),
-      s.damaged ? 'X' : '',
-      s.damaged ? (s.damageReason || '') : '',
-      s.damaged ? (s.damageDescription || '') : ''
+      ...(p.trackStatus ? [s.status || ''] : []),
+      ...(p.trackDamage ? [
+        s.damaged ? 'X' : '',
+        s.damaged ? (s.damageReason || '') : '',
+        s.damaged ? (s.damageDescription || '') : ''
+      ] : [])
     ]);
   });
 
@@ -2329,7 +2381,7 @@ async function saveRolloutProject() {
         const nameKey = ns.name ? String(ns.name).trim().toLowerCase() : '';
         const match = (codeKey && byCode.get(codeKey)) || (nameKey && byName.get(nameKey));
         if (match) {
-          return { ...ns, id: match.id, damaged: match.damaged || false, damageReason: match.damageReason || '', damageDescription: match.damageDescription || '' };
+          return { ...ns, id: match.id, damaged: match.damaged || false, damageReason: match.damageReason || '', damageDescription: match.damageDescription || '', status: match.status || '' };
         }
         return ns;
       });
@@ -2340,7 +2392,7 @@ async function saveRolloutProject() {
     if (txt.trim()) {
       stores = txt.split('\n').filter(Boolean).map(line => {
         const [code, sname] = line.split('|').map(s => s.trim());
-        return { id: uid(), code: code||'', name: sname||code||'', infoFields: [], components: [], damaged: false, damageReason: '', damageDescription: '' };
+        return { id: uid(), code: code||'', name: sname||code||'', infoFields: [], components: [], damaged: false, damageReason: '', damageDescription: '', status: '' };
       });
       compImages = [];
     } else {
@@ -2362,12 +2414,14 @@ async function saveRolloutProject() {
   const lang = document.getElementById('rProjLang').value;
   const trackDamage = document.getElementById('rTrackDamage').checked;
   const damageReasons = document.getElementById('rDamageReasons').value.split('\n').map(s => s.trim()).filter(Boolean);
+  const trackStatus = document.getElementById('rTrackStatus').checked;
+  const statusOptions = document.getElementById('rStatusOptions').value.split('\n').map(s => s.trim()).filter(Boolean);
   const id = existingId;
   if (id) {
     const idx = appData.rolloutProjects.findIndex(p => p.id === id);
-    if (idx >= 0) appData.rolloutProjects[idx] = { ...appData.rolloutProjects[idx], name, from, to, email, cislo, stores, allowedTechs, minFotoPred, minFotoPo, noRapport, requireContact, lang, trackDamage, damageReasons, compImages };
+    if (idx >= 0) appData.rolloutProjects[idx] = { ...appData.rolloutProjects[idx], name, from, to, email, cislo, stores, allowedTechs, minFotoPred, minFotoPo, noRapport, requireContact, lang, trackDamage, damageReasons, trackStatus, statusOptions, compImages };
   } else {
-    appData.rolloutProjects.push({ id: uid(), name, from, to, email, cislo, stores, allowedTechs, minFotoPred, minFotoPo, noRapport, requireContact, lang, trackDamage, damageReasons, compImages, status: 'active', createdAt: new Date().toISOString() });
+    appData.rolloutProjects.push({ id: uid(), name, from, to, email, cislo, stores, allowedTechs, minFotoPred, minFotoPo, noRapport, requireContact, lang, trackDamage, damageReasons, trackStatus, statusOptions, compImages, status: 'active', createdAt: new Date().toISOString() });
   }
 
   saveLocal();
@@ -2407,6 +2461,9 @@ function editRolloutProject(id) {
   document.getElementById('rTrackDamage').checked = !!p.trackDamage;
   document.getElementById('rDamageReasons').value = (p.damageReasons && p.damageReasons.length) ? p.damageReasons.join('\n') : DEFAULT_DAMAGE_REASONS;
   toggleDamageReasonsUI();
+  document.getElementById('rTrackStatus').checked = !!p.trackStatus;
+  document.getElementById('rStatusOptions').value = (p.statusOptions && p.statusOptions.length) ? p.statusOptions.join('\n') : DEFAULT_STATUS_OPTIONS;
+  toggleStatusOptionsUI();
   document.getElementById('rProjStoresManual').style.display = 'none';
   document.getElementById('rProjStoresText').value = '';
   univResetImportState();
@@ -2438,6 +2495,9 @@ function openNewRolloutModal() {
   document.getElementById('rTrackDamage').checked = false;
   document.getElementById('rDamageReasons').value = DEFAULT_DAMAGE_REASONS;
   toggleDamageReasonsUI();
+  document.getElementById('rTrackStatus').checked = false;
+  document.getElementById('rStatusOptions').value = DEFAULT_STATUS_OPTIONS;
+  toggleStatusOptionsUI();
   document.getElementById('rProjStoresManual').style.display = 'none';
   document.getElementById('rProjStoresText').value = '';
   univResetImportState();
@@ -2512,6 +2572,7 @@ function renderRolloutDetailList() {
           ${store.code ? `<div style="font-size:12px;color:var(--muted)">Kód: ${esc(store.code)}</div>` : ''}
           ${report ? `
             <div style="font-size:12px;color:var(--muted);margin-top:4px">👤 ${esc(report.technik || '—')} &nbsp;|&nbsp; 🕒 ${fmtDateTime(report.endTime ? new Date(report.endTime) : null)}</div>
+            ${report.status ? `<div style="font-size:12px;color:var(--ink2);margin-top:2px">📌 Status: ${esc(report.status)}</div>` : ''}
             ${report.damaged ? `<div style="font-size:12px;color:var(--err);margin-top:2px">⚠️ Poškodená${report.damageReason ? ': ' + esc(report.damageReason) : ''}</div>` : ''}
           ` : ''}
         </div>
@@ -2598,6 +2659,7 @@ async function markStoreDone(projId, storeId) {
     damaged: !!s.damaged,
     damageReason: s.damageReason || '',
     damageDescription: s.damageDescription || '',
+    status: s.status || '',
     completed: true,
     manuallyMarked: true
   });
