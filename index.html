@@ -1761,11 +1761,7 @@ function renderRolloutStepContent() {
     const useStatus = !!currentRolloutProject.trackStatus;
     const useDamage = !!currentRolloutProject.trackDamage;
     const statusOpts = currentRolloutProject.statusOptions?.length ? currentRolloutProject.statusOptions : DEFAULT_STATUS_OPTIONS.split('\n');
-    el.innerHTML = `
-      <div class="card">
-        <div class="step-number">Krok ${i+1} z ${getRolloutSteps().length}</div>
-        <div class="step-title">${step.icon} ${step.title}</div>
-        ${useStatus ? `
+    const statusHtml = `
           <div class="fg">
             <label>Status</label>
             <select onchange="rolloutStepData.status=this.value;renderRolloutStepContent()">
@@ -1779,12 +1775,18 @@ function renderRolloutStepContent() {
               <textarea rows="2" placeholder="Napíš, aký je stav..." oninput="onStatusNoteInput(this.value)">${esc(rolloutStepData.statusNote||'')}</textarea>
             </div>
           ` : ''}
-        ` : ''}
+        `;
+    el.innerHTML = `
+      <div class="card">
+        <div class="step-number">Krok ${i+1} z ${getRolloutSteps().length}</div>
+        <div class="step-title">${step.icon} ${step.title}</div>
+        ${useStatus && !useDamage ? statusHtml : ''}
         ${useDamage ? `<label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-weight:700;font-size:16px;padding:12px;background:${rolloutStepData.damaged?'var(--accent-l)':'var(--bg)'};border-radius:8px;margin-bottom:12px">
           <input type="checkbox" ${rolloutStepData.damaged?'checked':''} onchange="rolloutStepData.damaged=this.checked;renderRolloutStepContent()" style="width:20px;height:20px">
           ⚠️ Poškodená
         </label>
         ${rolloutStepData.damaged ? `
+          ${useStatus ? statusHtml : ''}
           <div class="fg">
             <label>Dôvod poškodenia</label>
             <select onchange="rolloutStepData.damageReason=this.value">
@@ -1972,8 +1974,8 @@ async function finishRollout() {
       damaged: rolloutStepData.damaged ? 'ano' : 'nie',
       damage_reason: rolloutStepData.damaged ? (rolloutStepData.damageReason || '') : '',
       damage_description: rolloutStepData.damaged ? (rolloutStepData.damageDescription || '') : '',
-      status: currentRolloutProject.trackStatus ? (rolloutStepData.status || '') : '',
-      status_note: (currentRolloutProject.trackStatus && isOtherStatus(rolloutStepData.status)) ? (rolloutStepData.statusNote || '') : '',
+      status: statusActive() ? (rolloutStepData.status || '') : '',
+      status_note: (statusActive() && isOtherStatus(rolloutStepData.status)) ? (rolloutStepData.statusNote || '') : '',
       pdf_base64: pdfBase64,
       pdf_filename: 'Rollout_' + String(currentRolloutStore.code || currentRolloutStore.name).replace(/[^a-zA-Z0-9]/g,'_') + '_' + fmtDateFile(endTime) + '.pdf'
     });
@@ -1993,8 +1995,8 @@ async function finishRollout() {
       damaged: !!rolloutStepData.damaged,
       damageReason: rolloutStepData.damaged ? (rolloutStepData.damageReason || '') : '',
       damageDescription: rolloutStepData.damaged ? (rolloutStepData.damageDescription || '') : '',
-      status: currentRolloutProject.trackStatus ? (rolloutStepData.status || '') : '',
-      statusNote: (currentRolloutProject.trackStatus && isOtherStatus(rolloutStepData.status)) ? (rolloutStepData.statusNote || '') : '',
+      status: statusActive() ? (rolloutStepData.status || '') : '',
+      statusNote: (statusActive() && isOtherStatus(rolloutStepData.status)) ? (rolloutStepData.statusNote || '') : '',
       completed: true
     };
     appData.reports.push(newReport);
@@ -2017,8 +2019,8 @@ async function finishRollout() {
         const freshProject = appData.rolloutProjects.find(p => p.id === currentRolloutProject.id);
         const freshStore = freshProject?.stores?.find(s => s.id === currentRolloutStore.id);
         if (freshStore && currentRolloutProject.trackStatus) {
-          freshStore.status = rolloutStepData.status || '';
-          freshStore.statusNote = isOtherStatus(rolloutStepData.status) ? (rolloutStepData.statusNote || '') : '';
+          freshStore.status = statusActive() ? (rolloutStepData.status || '') : '';
+          freshStore.statusNote = (statusActive() && isOtherStatus(rolloutStepData.status)) ? (rolloutStepData.statusNote || '') : '';
         }
         if (freshStore && currentRolloutProject.trackDamage) {
           freshStore.damaged = !!rolloutStepData.damaged;
@@ -2148,7 +2150,7 @@ async function generateRolloutPDF(endTime) {
   y += 50;
 
   // Status banner
-  if (currentRolloutProject.trackStatus && rolloutStepData.status) {
+  if (statusActive() && rolloutStepData.status) {
     const note = isOtherStatus(rolloutStepData.status) ? String(rolloutStepData.statusNote||'').trim() : '';
     const noteLines = note ? doc.setFontSize(8.5).splitTextToSize(L.upresnenie + ': ' + t(note), W-2*M-12).slice(0,2) : [];
     const boxH = note ? 14 + noteLines.length * 5 : 12;
@@ -2284,8 +2286,14 @@ function isOtherStatus(v) {
   const n = String(v||'').trim().toLowerCase();
   return n === 'iné' || n === 'ine' || n.startsWith('iné ') || n.startsWith('andere');
 }
+// Status is asked only after "Poškodená" is checked (if the project tracks damage)
+function statusActive() {
+  if (!currentRolloutProject?.trackStatus) return false;
+  if (currentRolloutProject.trackDamage && !rolloutStepData.damaged) return false;
+  return true;
+}
 function statusStepReady() {
-  if (!currentRolloutProject?.trackStatus) return true;
+  if (!statusActive()) return true;
   if (!rolloutStepData.status) return false;
   if (isOtherStatus(rolloutStepData.status) && !String(rolloutStepData.statusNote||'').trim()) return false;
   return true;
