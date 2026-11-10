@@ -792,12 +792,22 @@ textarea{resize:vertical;min-height:80px}
     </div>
     <div class="fg" id="rDamageReasonsWrap" style="display:none">
       <label>Dôvody poškodenia (každý na samostatný riadok)</label>
-      <textarea id="rDamageReasons" rows="6">Roztrhnutá/poškodená fólia
+      <textarea id="rDamageReasons" rows="10">Roztrhnutá/poškodená fólia
 Vyblednuté farby
 Graffiti / Vandalizmus
 Chýbajúci komponent
-Poškodená konštrukcia/rám
 Znečistenie
+Stromlos – bez prúdu
+Steuerung reagiert nicht – ovládač nefunguje
+Kabel DT 04/05 – kábel DT 04/05
+Starker Wind – silný vietor
+Vom Wind zerrissen – roztrhnutý vetrom
+Motoren beschädigt – poškodené motory
+Riemen zerrissen – roztrhnutý remeň
+Andere technische Fehler – iná technická chyba
+Baustelle – stavba
+Kein Zutritt – žiadny prístup
+Beschädigter Rahmen – poškodená konštrukcia/rám
 Iné</textarea>
     </div>
     <div class="fg">
@@ -1663,7 +1673,8 @@ function startRolloutInstall(storeId) {
     damaged: !!currentRolloutStore.damaged,
     damageReason: currentRolloutStore.damageReason || '',
     damageDescription: currentRolloutStore.damageDescription || '',
-    status: currentRolloutStore.status || ''
+    status: currentRolloutStore.status || '',
+    statusNote: currentRolloutStore.statusNote || ''
   };
   // Reset rapport photos if not needed
   if (currentRolloutProject?.noRapport) {
@@ -1762,6 +1773,12 @@ function renderRolloutStepContent() {
               ${statusOpts.map(o => `<option value="${esc(o)}" ${rolloutStepData.status===o?'selected':''}>${esc(o)}</option>`).join('')}
             </select>
           </div>
+          ${isOtherStatus(rolloutStepData.status) ? `
+            <div class="fg">
+              <label>Upresnenie statusu</label>
+              <textarea rows="2" placeholder="Napíš, aký je stav..." oninput="onStatusNoteInput(this.value)">${esc(rolloutStepData.statusNote||'')}</textarea>
+            </div>
+          ` : ''}
         ` : ''}
         ${useDamage ? `<label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-weight:700;font-size:16px;padding:12px;background:${rolloutStepData.damaged?'var(--accent-l)':'var(--bg)'};border-radius:8px;margin-bottom:12px">
           <input type="checkbox" ${rolloutStepData.damaged?'checked':''} onchange="rolloutStepData.damaged=this.checked;renderRolloutStepContent()" style="width:20px;height:20px">
@@ -1781,7 +1798,7 @@ function renderRolloutStepContent() {
           </div>
         ` : ''}` : ''}
       </div>
-      <button class="btn btn-primary" onclick="nextRolloutStep()" ${useStatus && !rolloutStepData.status ? 'disabled' : ''}>Pokračovať →</button>`;
+      <button class="btn btn-primary" id="btnRStatus" onclick="nextRolloutStep()" ${statusStepReady() ? '' : 'disabled'}>Pokračovať →</button>`;
   }
   else if (step.type === 'photo') {
     const photos = rolloutStepData[step.key];
@@ -1956,6 +1973,7 @@ async function finishRollout() {
       damage_reason: rolloutStepData.damaged ? (rolloutStepData.damageReason || '') : '',
       damage_description: rolloutStepData.damaged ? (rolloutStepData.damageDescription || '') : '',
       status: currentRolloutProject.trackStatus ? (rolloutStepData.status || '') : '',
+      status_note: (currentRolloutProject.trackStatus && isOtherStatus(rolloutStepData.status)) ? (rolloutStepData.statusNote || '') : '',
       pdf_base64: pdfBase64,
       pdf_filename: 'Rollout_' + String(currentRolloutStore.code || currentRolloutStore.name).replace(/[^a-zA-Z0-9]/g,'_') + '_' + fmtDateFile(endTime) + '.pdf'
     });
@@ -1976,6 +1994,7 @@ async function finishRollout() {
       damageReason: rolloutStepData.damaged ? (rolloutStepData.damageReason || '') : '',
       damageDescription: rolloutStepData.damaged ? (rolloutStepData.damageDescription || '') : '',
       status: currentRolloutProject.trackStatus ? (rolloutStepData.status || '') : '',
+      statusNote: (currentRolloutProject.trackStatus && isOtherStatus(rolloutStepData.status)) ? (rolloutStepData.statusNote || '') : '',
       completed: true
     };
     appData.reports.push(newReport);
@@ -1999,6 +2018,7 @@ async function finishRollout() {
         const freshStore = freshProject?.stores?.find(s => s.id === currentRolloutStore.id);
         if (freshStore && currentRolloutProject.trackStatus) {
           freshStore.status = rolloutStepData.status || '';
+          freshStore.statusNote = isOtherStatus(rolloutStepData.status) ? (rolloutStepData.statusNote || '') : '';
         }
         if (freshStore && currentRolloutProject.trackDamage) {
           freshStore.damaged = !!rolloutStepData.damaged;
@@ -2044,7 +2064,7 @@ const LANG_PDF = {
     info: 'DALSIE INFO',
     photoPred: 'STAV PRED INSTALÁCIOU', photoPost: 'STAV PO INSTALÁCII', rapport: 'RAPPORT',
     poznamka: 'POZNAMKA', strana: 'Strana',
-    poskodenaYes: 'POSKODENA', poskodenaNo: 'Bez poskodenia', dovod: 'Dovod', popis: 'Popis', status: 'Status'
+    poskodenaYes: 'POSKODENA', poskodenaNo: 'Bez poskodenia', dovod: 'Dovod', popis: 'Popis', status: 'Status', upresnenie: 'Upresnenie'
   },
   de: {
     rolloutLabel: 'Rollout',
@@ -2054,7 +2074,7 @@ const LANG_PDF = {
     info: 'WEITERE INFOS',
     photoPred: 'ZUSTAND VOR DER INSTALLATION', photoPost: 'ZUSTAND NACH DER INSTALLATION', rapport: 'RAPPORT',
     poznamka: 'ANMERKUNG', strana: 'Seite',
-    poskodenaYes: 'BESCHÄDIGT', poskodenaNo: 'Kein Schaden', dovod: 'Ursache', popis: 'Beschreibung', status: 'Status'
+    poskodenaYes: 'BESCHÄDIGT', poskodenaNo: 'Kein Schaden', dovod: 'Ursache', popis: 'Beschreibung', status: 'Status', upresnenie: 'Anmerkung'
   }
 };
 
@@ -2129,13 +2149,20 @@ async function generateRolloutPDF(endTime) {
 
   // Status banner
   if (currentRolloutProject.trackStatus && rolloutStepData.status) {
+    const note = isOtherStatus(rolloutStepData.status) ? String(rolloutStepData.statusNote||'').trim() : '';
+    const noteLines = note ? doc.setFontSize(8.5).splitTextToSize(L.upresnenie + ': ' + t(note), W-2*M-12).slice(0,2) : [];
+    const boxH = note ? 14 + noteLines.length * 5 : 12;
     doc.setFillColor(240,240,240);
     doc.setDrawColor(60,60,60);
     doc.setLineWidth(0.6);
-    doc.roundedRect(M, y, W-2*M, 12, 3, 3, 'FD');
+    doc.roundedRect(M, y, W-2*M, boxH, 3, 3, 'FD');
     doc.setFontSize(9.5); doc.setFont('helvetica','bold'); doc.setTextColor(30,30,30);
     doc.text(L.status + ': ' + t(rolloutStepData.status), M+6, y+7.5);
-    y += 12 + 6;
+    if (note) {
+      doc.setFontSize(8.5); doc.setFont('helvetica','normal'); doc.setTextColor(60,60,60);
+      doc.text(noteLines, M+6, y+14);
+    }
+    y += boxH + 6;
   }
 
   // Damage banner
@@ -2248,9 +2275,26 @@ function toggleManualStores() {
   el.style.display = el.style.display === 'none' ? 'block' : 'none';
 }
 
-const DEFAULT_DAMAGE_REASONS = 'Roztrhnutá/poškodená fólia\nVyblednuté farby\nGraffiti / Vandalizmus\nChýbajúci komponent\nPoškodená konštrukcia/rám\nZnečistenie\nIné';
+const DEFAULT_DAMAGE_REASONS = 'Roztrhnutá/poškodená fólia\nVyblednuté farby\nGraffiti / Vandalizmus\nChýbajúci komponent\nZnečistenie\nStromlos – bez prúdu\nSteuerung reagiert nicht – ovládač nefunguje\nKabel DT 04/05 – kábel DT 04/05\nStarker Wind – silný vietor\nVom Wind zerrissen – roztrhnutý vetrom\nMotoren beschädigt – poškodené motory\nRiemen zerrissen – roztrhnutý remeň\nAndere technische Fehler – iná technická chyba\nBaustelle – stavba\nKein Zutritt – žiadny prístup\nBeschädigter Rahmen – poškodená konštrukcia/rám\nIné';
 
-const DEFAULT_STATUS_OPTIONS = 'Nicht ausgehängt – nevyvesený\nStatisch auf Pos 1- statický na pozícii 1\nStatisch auf Pos 2- statický na pozícii 2\nStatisch auf Pos 3- statický na pozícii 3\nAusgehängt - vyvesený';
+const DEFAULT_STATUS_OPTIONS = 'Nicht ausgehängt – nevyvesený\nStatisch auf Pos 1 – statický na pozícii 1\nStatisch auf Pos 2 – statický na pozícii 2\nStatisch auf Pos 3 – statický na pozícii 3\nAusgehängt – vyvesený\nIné';
+
+// "Iné" (other) status requires a free-text clarification
+function isOtherStatus(v) {
+  const n = String(v||'').trim().toLowerCase();
+  return n === 'iné' || n === 'ine' || n.startsWith('iné ') || n.startsWith('andere');
+}
+function statusStepReady() {
+  if (!currentRolloutProject?.trackStatus) return true;
+  if (!rolloutStepData.status) return false;
+  if (isOtherStatus(rolloutStepData.status) && !String(rolloutStepData.statusNote||'').trim()) return false;
+  return true;
+}
+function onStatusNoteInput(v) {
+  rolloutStepData.statusNote = v;
+  const btn = document.getElementById('btnRStatus');
+  if (btn) btn.disabled = !statusStepReady();
+}
 
 function toggleStatusOptionsUI() {
   const show = document.getElementById('rTrackStatus').checked;
@@ -2323,7 +2367,7 @@ function exportDamageXLS(projectId) {
   stores.forEach(s => (s.infoFields||[]).forEach(f => { if (!infoLabels.includes(f.label)) infoLabels.push(f.label); }));
 
   const header = ['Kód', 'Názov', ...infoLabels,
-    ...(p.trackStatus ? ['Status'] : []),
+    ...(p.trackStatus ? ['Status', 'Upresnenie statusu'] : []),
     ...(p.trackDamage ? ['Poškodená', 'Dôvod poškodenia', 'Popis'] : [])];
   const rows = [header];
   stores.forEach(s => {
@@ -2333,7 +2377,7 @@ function exportDamageXLS(projectId) {
       s.code || '',
       s.name || '',
       ...infoLabels.map(l => infoMap[l] || ''),
-      ...(p.trackStatus ? [s.status || ''] : []),
+      ...(p.trackStatus ? [s.status || '', s.statusNote || ''] : []),
       ...(p.trackDamage ? [
         s.damaged ? 'X' : '',
         s.damaged ? (s.damageReason || '') : '',
@@ -2381,7 +2425,7 @@ async function saveRolloutProject() {
         const nameKey = ns.name ? String(ns.name).trim().toLowerCase() : '';
         const match = (codeKey && byCode.get(codeKey)) || (nameKey && byName.get(nameKey));
         if (match) {
-          return { ...ns, id: match.id, damaged: match.damaged || false, damageReason: match.damageReason || '', damageDescription: match.damageDescription || '', status: match.status || '' };
+          return { ...ns, id: match.id, damaged: match.damaged || false, damageReason: match.damageReason || '', damageDescription: match.damageDescription || '', status: match.status || '', statusNote: match.statusNote || '' };
         }
         return ns;
       });
@@ -2392,7 +2436,7 @@ async function saveRolloutProject() {
     if (txt.trim()) {
       stores = txt.split('\n').filter(Boolean).map(line => {
         const [code, sname] = line.split('|').map(s => s.trim());
-        return { id: uid(), code: code||'', name: sname||code||'', infoFields: [], components: [], damaged: false, damageReason: '', damageDescription: '', status: '' };
+        return { id: uid(), code: code||'', name: sname||code||'', infoFields: [], components: [], damaged: false, damageReason: '', damageDescription: '', status: '', statusNote: '' };
       });
       compImages = [];
     } else {
@@ -2572,7 +2616,7 @@ function renderRolloutDetailList() {
           ${store.code ? `<div style="font-size:12px;color:var(--muted)">Kód: ${esc(store.code)}</div>` : ''}
           ${report ? `
             <div style="font-size:12px;color:var(--muted);margin-top:4px">👤 ${esc(report.technik || '—')} &nbsp;|&nbsp; 🕒 ${fmtDateTime(report.endTime ? new Date(report.endTime) : null)}</div>
-            ${report.status ? `<div style="font-size:12px;color:var(--ink2);margin-top:2px">📌 Status: ${esc(report.status)}</div>` : ''}
+            ${report.status ? `<div style="font-size:12px;color:var(--ink2);margin-top:2px">📌 Status: ${esc(report.status)}${report.statusNote ? ' – ' + esc(report.statusNote) : ''}</div>` : ''}
             ${report.damaged ? `<div style="font-size:12px;color:var(--err);margin-top:2px">⚠️ Poškodená${report.damageReason ? ': ' + esc(report.damageReason) : ''}</div>` : ''}
           ` : ''}
         </div>
@@ -2660,6 +2704,7 @@ async function markStoreDone(projId, storeId) {
     damageReason: s.damageReason || '',
     damageDescription: s.damageDescription || '',
     status: s.status || '',
+    statusNote: s.statusNote || '',
     completed: true,
     manuallyMarked: true
   });
